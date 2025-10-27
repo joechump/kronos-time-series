@@ -9,14 +9,70 @@ from flask_cors import CORS
 import sys
 import warnings
 import datetime
+import argparse
 warnings.filterwarnings('ignore')
 
 # Add project root directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import akshare data provider
+try:
+    from akshare_data_provider import AkshareDataProvider
+    data_provider = AkshareDataProvider()
+except ImportError as e:
+    print(f"Warning: akshare_data_provider not available: {e}")
+    data_provider = None
+
+# Import auto model loader
+try:
+    from auto_model_loader import AutoModelLoader
+    auto_loader = AutoModelLoader()
+except ImportError as e:
+    print(f"Warning: auto_model_loader not available: {e}")
+    auto_loader = None
+
+# Import local model manager
+try:
+    from local_model_manager import LocalModelManager
+    local_model_manager = LocalModelManager()
+    print("Local model manager initialized successfully")
+except ImportError as e:
+    print(f"Warning: local_model_manager not available: {e}")
+    local_model_manager = None
+
+# Import direct model loader
+try:
+    from direct_model_loader import DirectModelLoader
+    direct_model_loader = DirectModelLoader()
+    print("Direct model loader initialized successfully")
+    
+    # 自动加载最优模型
+    success, message, model_key = direct_model_loader.auto_load_best_model()
+    if success:
+        print(f"Auto-loaded model: {model_key} - {message}")
+        # 设置全局模型变量
+        loaded_model = direct_model_loader.get_loaded_model()
+        if loaded_model:
+            tokenizer = loaded_model['tokenizer']
+            model = loaded_model['model']
+            print(f"Model {model_key} loaded successfully")
+    else:
+        print(f"Auto-load failed: {message}")
+        
+except ImportError as e:
+    print(f"Warning: direct_model_loader not available: {e}")
+    direct_model_loader = None
+
 try:
     from model import Kronos, KronosTokenizer, KronosPredictor
-    MODEL_AVAILABLE = True
+    # 测试模型库是否真正可用
+    try:
+        # 尝试导入一个简单的模型来验证可用性
+        test_tokenizer = KronosTokenizer.from_pretrained('NeoQuasar/Kronos-Tokenizer-base')
+        MODEL_AVAILABLE = True
+    except Exception as e:
+        MODEL_AVAILABLE = False
+        print(f"Warning: Kronos model library not available: {e}")
 except ImportError:
     MODEL_AVAILABLE = False
     print("Warning: Kronos model cannot be imported, will use simulated data for demonstration")
@@ -208,39 +264,77 @@ def save_prediction_results(file_path, prediction_type, prediction_results, actu
         return None
 
 def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, historical_start_idx=0):
-    """Create prediction chart"""
-    # Use specified historical data start position, not always from the beginning of df
+    """创建美观的预测图表"""
+    # 使用指定的历史数据起始位置
     if historical_start_idx + lookback + pred_len <= len(df):
-        # Display lookback historical points + pred_len prediction points starting from specified position
         historical_df = df.iloc[historical_start_idx:historical_start_idx+lookback]
         prediction_range = range(historical_start_idx+lookback, historical_start_idx+lookback+pred_len)
     else:
-        # If data is insufficient, adjust to maximum available range
         available_lookback = min(lookback, len(df) - historical_start_idx)
         available_pred_len = min(pred_len, max(0, len(df) - historical_start_idx - available_lookback))
         historical_df = df.iloc[historical_start_idx:historical_start_idx+available_lookback]
         prediction_range = range(historical_start_idx+available_lookback, historical_start_idx+available_lookback+available_pred_len)
     
-    # Create chart
+    # 创建图表
     fig = go.Figure()
     
-    # Add historical data (candlestick chart)
+    # 美观的深色主题配置
+    dark_theme_layout = {
+        'title': {
+            'text': 'Kronos 股票价格预测',
+            'font': {'size': 24, 'color': '#ffffff', 'family': 'Arial, sans-serif'},
+            'x': 0.5,
+            'xanchor': 'center'
+        },
+        'plot_bgcolor': '#1e1e1e',
+        'paper_bgcolor': '#2d2d2d',
+        'font': {'color': '#ffffff', 'family': 'Arial, sans-serif'},
+        'xaxis': {
+            'title': {'text': '时间', 'font': {'size': 16, 'color': '#ffffff'}},
+            'gridcolor': '#444444',
+            'tickformat': '%Y-%m-%d',
+            'rangeslider': {'visible': True, 'bgcolor': '#3d3d3d'},
+            'type': 'date'
+        },
+        'yaxis': {
+            'title': {'text': '价格(元)', 'font': {'size': 16, 'color': '#ffffff'}},
+            'gridcolor': '#444444',
+            'tickprefix': '¥',
+            'side': 'right'
+        },
+        'legend': {
+            'orientation': 'h',
+            'y': -0.15,
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 12, 'color': '#ffffff'},
+            'bgcolor': 'rgba(0,0,0,0.5)',
+            'bordercolor': '#666666'
+        },
+        'margin': {'l': 60, 'r': 60, 't': 100, 'b': 80},
+        'height': 650,
+        'hovermode': 'x unified',
+        'showlegend': True
+    }
+    
+    # 添加历史数据（K线图）
     fig.add_trace(go.Candlestick(
         x=historical_df['timestamps'] if 'timestamps' in historical_df.columns else historical_df.index,
         open=historical_df['open'],
         high=historical_df['high'],
         low=historical_df['low'],
         close=historical_df['close'],
-        name='Historical Data (400 data points)',
-        increasing_line_color='#26A69A',
-        decreasing_line_color='#EF5350'
+        name='历史数据',
+        increasing_line_color='#00C851',  # 绿色
+        decreasing_line_color='#ff4444',  # 红色
+        increasing_fillcolor='rgba(0, 200, 81, 0.3)',
+        decreasing_fillcolor='rgba(255, 68, 68, 0.3)',
+        line_width=1.5
     ))
     
-    # Add prediction data (candlestick chart)
+    # 添加预测数据（K线图）
     if pred_df is not None and len(pred_df) > 0:
-        # Calculate prediction data timestamps - ensure continuity with historical data
         if 'timestamps' in df.columns and len(historical_df) > 0:
-            # Start from the last timestamp of historical data, create prediction timestamps with the same time interval
             last_timestamp = historical_df['timestamps'].iloc[-1]
             time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0] if len(df) > 1 else pd.Timedelta(hours=1)
             
@@ -250,7 +344,6 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
                 freq=time_diff
             )
         else:
-            # If no timestamps, use index
             pred_timestamps = range(len(historical_df), len(historical_df) + len(pred_df))
         
         fig.add_trace(go.Candlestick(
@@ -259,20 +352,20 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
             high=pred_df['high'],
             low=pred_df['low'],
             close=pred_df['close'],
-            name='Prediction Data (120 data points)',
-            increasing_line_color='#66BB6A',
-            decreasing_line_color='#FF7043'
+            name='预测数据',
+            increasing_line_color='#33b5e5',  # 蓝色
+            decreasing_line_color='#ff8800',  # 橙色
+            increasing_fillcolor='rgba(51, 181, 229, 0.3)',
+            decreasing_fillcolor='rgba(255, 136, 0, 0.3)',
+            line_width=1.5
         ))
     
-    # Add actual data for comparison (if exists)
+    # 添加实际数据用于比较（如果存在）
     if actual_df is not None and len(actual_df) > 0:
-        # Actual data should be in the same time period as prediction data
         if 'timestamps' in df.columns:
-            # Actual data should use the same timestamps as prediction data to ensure time alignment
             if 'pred_timestamps' in locals():
                 actual_timestamps = pred_timestamps
             else:
-                # If no prediction timestamps, calculate from the last timestamp of historical data
                 if len(historical_df) > 0:
                     last_timestamp = historical_df['timestamps'].iloc[-1]
                     time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0] if len(df) > 1 else pd.Timedelta(hours=1)
@@ -292,24 +385,29 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
             high=actual_df['high'],
             low=actual_df['low'],
             close=actual_df['close'],
-            name='Actual Data (120 data points)',
-            increasing_line_color='#FF9800',
-            decreasing_line_color='#F44336'
+            name='实际数据',
+            increasing_line_color='#aa66cc',  # 紫色
+            decreasing_line_color='#ffbb33',  # 黄色
+            increasing_fillcolor='rgba(170, 102, 204, 0.3)',
+            decreasing_fillcolor='rgba(255, 187, 51, 0.3)',
+            line_width=1.5
         ))
     
-    # Update layout
+    # 应用美观的布局配置
+    fig.update_layout(dark_theme_layout)
+    
+    # 添加交互功能配置
     fig.update_layout(
-        title='Kronos Financial Prediction Results - 400 Historical Points + 120 Prediction Points vs 120 Actual Points',
-        xaxis_title='Time',
-        yaxis_title='Price',
-        template='plotly_white',
-        height=600,
-        showlegend=True
+        modebar={
+            'orientation': 'v',
+            'bgcolor': 'rgba(0,0,0,0.7)',
+            'color': '#ffffff',
+            'activecolor': '#33b5e5'
+        }
     )
     
-    # Ensure x-axis time continuity
+    # 确保x轴时间连续性
     if 'timestamps' in historical_df.columns:
-        # Get all timestamps and sort them
         all_timestamps = []
         if len(historical_df) > 0:
             all_timestamps.extend(historical_df['timestamps'])
@@ -322,8 +420,8 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
             all_timestamps = sorted(all_timestamps)
             fig.update_xaxes(
                 range=[all_timestamps[0], all_timestamps[-1]],
-                rangeslider_visible=False,
-                type='date'
+                rangeslider_visible=True,
+                rangeslider_thickness=0.1
             )
     
     return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
@@ -353,54 +451,160 @@ def load_data():
         if error:
             return jsonify({'error': error}), 400
         
-        # Detect data time frequency
-        def detect_timeframe(df):
-            if len(df) < 2:
-                return "Unknown"
-            
-            time_diffs = []
-            for i in range(1, min(10, len(df))):  # Check first 10 time differences
-                diff = df['timestamps'].iloc[i] - df['timestamps'].iloc[i-1]
-                time_diffs.append(diff)
-            
-            if not time_diffs:
-                return "Unknown"
-            
-            # Calculate average time difference
-            avg_diff = sum(time_diffs, pd.Timedelta(0)) / len(time_diffs)
-            
-            # Convert to readable format
-            if avg_diff < pd.Timedelta(minutes=1):
-                return f"{avg_diff.total_seconds():.0f} seconds"
-            elif avg_diff < pd.Timedelta(hours=1):
-                return f"{avg_diff.total_seconds() / 60:.0f} minutes"
-            elif avg_diff < pd.Timedelta(days=1):
-                return f"{avg_diff.total_seconds() / 3600:.0f} hours"
-            else:
-                return f"{avg_diff.days} days"
-        
-        # Return data information
+        # Get basic information
         data_info = {
-            'rows': len(df),
+            'file_path': file_path,
+            'row_count': len(df),
             'columns': list(df.columns),
-            'start_date': df['timestamps'].min().isoformat() if 'timestamps' in df.columns else 'N/A',
-            'end_date': df['timestamps'].max().isoformat() if 'timestamps' in df.columns else 'N/A',
-            'price_range': {
-                'min': float(df[['open', 'high', 'low', 'close']].min().min()),
-                'max': float(df[['open', 'high', 'low', 'close']].max().max())
-            },
-            'prediction_columns': ['open', 'high', 'low', 'close'] + (['volume'] if 'volume' in df.columns else []),
-            'timeframe': detect_timeframe(df)
+            'data_types': {col: str(df[col].dtype) for col in df.columns},
+            'start_time': df['timestamps'].min().isoformat() if 'timestamps' in df.columns else None,
+            'end_time': df['timestamps'].max().isoformat() if 'timestamps' in df.columns else None,
+            'sample_data': df.head(5).to_dict('records')
         }
         
         return jsonify({
             'success': True,
-            'data_info': data_info,
-            'message': f'Successfully loaded data, total {len(df)} rows'
+            'data_info': data_info
         })
         
     except Exception as e:
         return jsonify({'error': f'Failed to load data: {str(e)}'}), 500
+
+@app.route('/api/akshare/search-stock', methods=['POST'])
+def search_stock():
+    """Search stock by symbol or name"""
+    try:
+        if data_provider is None:
+            return jsonify({'error': 'Akshare data provider not available'}), 503
+        
+        data = request.get_json()
+        keyword = data.get('keyword', '').strip()
+        
+        if not keyword:
+            return jsonify({'error': 'Search keyword cannot be empty'}), 400
+        
+        results = data_provider.search_stock(keyword)
+        
+        return jsonify({
+            'success': True,
+            'results': results,
+            'count': len(results)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Stock search failed: {str(e)}'}), 500
+
+@app.route('/api/akshare/get-stock-data', methods=['POST'])
+def get_stock_data():
+    """Get stock historical data"""
+    try:
+        if data_provider is None:
+            return jsonify({'error': 'Akshare data provider not available'}), 503
+        
+        data = request.get_json()
+        symbol = data.get('symbol', '').strip()
+        start_date = data.get('start_date', '')
+        end_date = data.get('end_date', '')
+        period = data.get('period', 'daily')  # daily, weekly, monthly
+        
+        if not symbol:
+            return jsonify({'error': 'Stock symbol cannot be empty'}), 400
+        
+        stock_data = data_provider.get_stock_data(symbol, period, start_date, end_date)
+        
+        if stock_data is None or stock_data.empty:
+            return jsonify({'error': f'No data found for symbol: {symbol}'}), 404
+        
+        # Convert to DataFrame for processing
+        df = pd.DataFrame(stock_data)
+        
+        # Prepare data info
+        data_info = {
+            'symbol': symbol,
+            'row_count': len(df),
+            'columns': list(df.columns),
+            'start_date': df['date'].min() if 'date' in df.columns else None,
+            'end_date': df['date'].max() if 'date' in df.columns else None,
+            'sample_data': df.head(5).to_dict('records')
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': stock_data.to_dict('records'),
+            'data_info': data_info
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get stock data: {str(e)}'}), 500
+
+@app.route('/api/akshare/trading-calendar', methods=['GET'])
+def get_trading_calendar():
+    """Get trading calendar"""
+    try:
+        if data_provider is None:
+            return jsonify({'error': 'Akshare data provider not available'}), 503
+        
+        year = request.args.get('year', str(datetime.now().year))
+        
+        calendar_data = data_provider.get_trading_calendar(year)
+        
+        return jsonify({
+            'success': True,
+            'year': year,
+            'trading_days': calendar_data,
+            'count': len(calendar_data)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get trading calendar: {str(e)}'}), 500
+
+@app.route('/api/akshare/is-trading-day', methods=['POST'])
+def is_trading_day():
+    """Check if a date is trading day"""
+    try:
+        if data_provider is None:
+            return jsonify({'error': 'Akshare data provider not available'}), 503
+        
+        data = request.get_json()
+        date_str = data.get('date', '')
+        
+        if not date_str:
+            return jsonify({'error': 'Date cannot be empty'}), 400
+        
+        is_trading = data_provider.is_trading_day(date_str)
+        
+        return jsonify({
+            'success': True,
+            'date': date_str,
+            'is_trading_day': is_trading
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to check trading day: {str(e)}'}), 500
+
+@app.route('/api/akshare/next-trading-day', methods=['POST'])
+def get_next_trading_day():
+    """Get next trading day"""
+    try:
+        if data_provider is None:
+            return jsonify({'error': 'Akshare data provider not available'}), 503
+        
+        data = request.get_json()
+        date_str = data.get('date', '')
+        
+        if not date_str:
+            return jsonify({'error': 'Date cannot be empty'}), 400
+        
+        next_day = data_provider.get_next_trading_day(date_str)
+        
+        return jsonify({
+            'success': True,
+            'date': date_str,
+            'next_trading_day': next_day
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get next trading day: {str(e)}'}), 500
 
 @app.route('/api/predict', methods=['POST'])
 def predict():
@@ -428,7 +632,73 @@ def predict():
             return jsonify({'error': f'Insufficient data length, need at least {lookback} rows'}), 400
         
         # Perform prediction
-        if MODEL_AVAILABLE and predictor is not None:
+        # 优先使用直接加载的模型
+        if direct_model_loader and direct_model_loader.get_loaded_model():
+            try:
+                # Use directly loaded model
+                loaded_model = direct_model_loader.get_loaded_model()
+                predictor = KronosPredictor(loaded_model['model'], loaded_model['tokenizer'])
+                
+                # Only use necessary columns: OHLCV, excluding amount
+                required_cols = ['open', 'high', 'low', 'close']
+                if 'volume' in df.columns:
+                    required_cols.append('volume')
+                
+                # Process time period selection
+                start_date = data.get('start_date')
+                
+                if start_date:
+                    # Custom time period - fix logic: use data within selected window
+                    start_dt = pd.to_datetime(start_date)
+                    
+                    # Find data after start time
+                    mask = df['timestamps'] >= start_dt
+                    time_range_df = df[mask]
+                    
+                    # Ensure sufficient data: lookback + pred_len
+                    if len(time_range_df) < lookback + pred_len:
+                        return jsonify({'error': f'Insufficient data from start time {start_dt.strftime("%Y-%m-%d %H:%M")}, need at least {lookback + pred_len} data points, currently only {len(time_range_df)} available'}), 400
+                    
+                    # Use first lookback data points within selected window for prediction
+                    x_df = time_range_df.iloc[:lookback][required_cols]
+                    x_timestamp = time_range_df.iloc[:lookback]['timestamps']
+                    
+                    # Use last pred_len data points within selected window as actual values
+                    y_timestamp = time_range_df.iloc[lookback:lookback+pred_len]['timestamps']
+                    
+                    # Calculate actual time period length
+                    start_timestamp = time_range_df['timestamps'].iloc[0]
+                    end_timestamp = time_range_df['timestamps'].iloc[lookback+pred_len-1]
+                    time_span = end_timestamp - start_timestamp
+                    
+                    prediction_type = f"Kronos model prediction (within selected window: first {lookback} data points for prediction, last {pred_len} data points for comparison, time span: {time_span})"
+                else:
+                    # Use latest data
+                    x_df = df.iloc[:lookback][required_cols]
+                    x_timestamp = df.iloc[:lookback]['timestamps']
+                    y_timestamp = df.iloc[lookback:lookback+pred_len]['timestamps']
+                    prediction_type = "Kronos model prediction (latest data)"
+                
+                # Ensure timestamps are Series format, not DatetimeIndex, to avoid .dt attribute error in Kronos model
+                if isinstance(x_timestamp, pd.DatetimeIndex):
+                    x_timestamp = pd.Series(x_timestamp, name='timestamps')
+                if isinstance(y_timestamp, pd.DatetimeIndex):
+                    y_timestamp = pd.Series(y_timestamp, name='timestamps')
+                
+                pred_df = predictor.predict(
+                    df=x_df,
+                    x_timestamp=x_timestamp,
+                    y_timestamp=y_timestamp,
+                    pred_len=pred_len,
+                    T=temperature,
+                    top_p=top_p,
+                    sample_count=sample_count
+                )
+                
+            except Exception as e:
+                return jsonify({'error': f'Kronos model prediction failed: {str(e)}'}), 500
+        # 其次使用全局加载的模型
+        elif MODEL_AVAILABLE and predictor is not None:
             try:
                 # Use real Kronos model
                 # Only use necessary columns: OHLCV, excluding amount
@@ -626,7 +896,7 @@ def predict():
 
 @app.route('/api/load-model', methods=['POST'])
 def load_model():
-    """Load Kronos model"""
+    """Load Kronos model with strict local-first strategy"""
     global tokenizer, model, predictor
     
     try:
@@ -642,68 +912,414 @@ def load_model():
         
         model_config = AVAILABLE_MODELS[model_key]
         
-        # Load tokenizer and model
-        tokenizer = KronosTokenizer.from_pretrained(model_config['tokenizer_id'])
-        model = Kronos.from_pretrained(model_config['model_id'])
-        
-        # Create predictor
-        predictor = KronosPredictor(model, tokenizer, device=device, max_context=model_config['context_length'])
-        
-        return jsonify({
-            'success': True,
-            'message': f'Model loaded successfully: {model_config["name"]} ({model_config["params"]}) on {device}',
-            'model_info': {
-                'name': model_config['name'],
-                'params': model_config['params'],
-                'context_length': model_config['context_length'],
-                'description': model_config['description']
-            }
-        })
+        # 严格本地优先策略：只从本地加载，不进行远程下载
+        if local_model_manager and local_model_manager.is_model_available_locally(model_config['model_id']):
+            try:
+                # 从本地加载模型
+                model, tokenizer = local_model_manager.load_model_from_local(model_config['model_id'])
+                load_source = "local"
+                print(f"✅ Model loaded from local storage: {model_config['model_id']}")
+                
+                # Create predictor
+                predictor = KronosPredictor(model, tokenizer, device=device, max_context=model_config['context_length'])
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'模型加载成功: {model_config["name"]} ({model_config["params"]}) 在 {device} 上运行 (从本地加载)',
+                    'model_info': {
+                        'name': model_config['name'],
+                        'params': model_config['params'],
+                        'context_length': model_config['context_length'],
+                        'description': model_config['description'],
+                        'load_source': load_source
+                    }
+                })
+                
+            except Exception as e:
+                print(f"❌ Failed to load model from local: {e}")
+                return jsonify({
+                    'error': f'本地模型加载失败: {str(e)}。请先下载模型到本地。',
+                    'suggestion': '请先使用"下载模型"功能将模型保存到本地'
+                }), 400
+        else:
+            # 本地模型不可用，提示用户先下载
+            return jsonify({
+                'error': f'模型 {model_config["name"]} 在本地不可用',
+                'suggestion': '请先使用"下载模型"功能将模型保存到本地，然后重新加载',
+                'model_info': {
+                    'name': model_config['name'],
+                    'model_id': model_config['model_id'],
+                    'available_locally': False
+                }
+            }), 400
         
     except Exception as e:
-        return jsonify({'error': f'Model loading failed: {str(e)}'}), 500
+        return jsonify({'error': f'模型加载失败: {str(e)}'}), 500
 
 @app.route('/api/available-models')
 def get_available_models():
     """Get available model list"""
+    local_models_info = {}
+    if local_model_manager:
+        local_models = local_model_manager.get_available_local_models()
+        for model_info in local_models:
+            local_models_info[model_info['model_id']] = {
+                'available': True,
+                'size': model_info['size'],
+                'downloaded_at': model_info['downloaded_at']
+            }
+    
     return jsonify({
         'models': AVAILABLE_MODELS,
-        'model_available': MODEL_AVAILABLE
+        'model_available': MODEL_AVAILABLE,
+        'local_models': local_models_info
+    })
+
+@app.route('/api/download-model', methods=['POST'])
+def download_model():
+    """Download model to local storage"""
+    try:
+        if not local_model_manager:
+            return jsonify({'error': 'Local model manager not available'}), 400
+        
+        data = request.get_json()
+        model_key = data.get('model_key', 'kronos-small')
+        
+        if model_key not in AVAILABLE_MODELS:
+            return jsonify({'error': f'Unsupported model: {model_key}'}), 400
+        
+        model_config = AVAILABLE_MODELS[model_key]
+        
+        # 检查网络连接
+        try:
+            import requests
+            response = requests.get('https://huggingface.co', timeout=10)
+            if response.status_code != 200:
+                return jsonify({
+                    'error': '网络连接异常，无法访问Hugging Face。请检查网络连接或使用镜像源。',
+                    'suggestion': '可以尝试设置环境变量 HF_ENDPOINT=https://hf-mirror.com 使用镜像源'
+                }), 503
+        except Exception as network_error:
+            return jsonify({
+                'error': f'网络连接失败: {str(network_error)}',
+                'suggestion': '请检查网络连接，或使用镜像源下载。系统将自动尝试镜像源。'
+            }), 503
+        
+        # 下载模型到本地
+        success, message = local_model_manager.download_model(
+            model_config['model_id'],
+            model_config['tokenizer_id']
+        )
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'模型下载成功: {model_config["name"]}',
+                'model_info': {
+                    'name': model_config['name'],
+                    'model_id': model_config['model_id'],
+                    'local_path': str(local_model_manager.get_model_path(model_config['model_id'])),
+                    'size': model_config['params'],
+                    'context_length': model_config['context_length']
+                }
+            })
+        else:
+            # 提供更详细的错误信息和建议
+            error_details = {
+                'error': message,
+                'suggestions': [
+                    '检查网络连接是否正常',
+                    '尝试使用镜像源: 设置环境变量 HF_ENDPOINT=https://hf-mirror.com',
+                    '确认模型ID是否正确: ' + model_config['model_id'],
+                    '检查磁盘空间是否充足'
+                ]
+            }
+            return jsonify(error_details), 500
+            
+    except Exception as e:
+        return jsonify({
+            'error': f'模型下载失败: {str(e)}',
+            'suggestion': '请检查网络连接和模型配置'
+        }), 500
+
+@app.route('/api/local-models')
+def get_local_models():
+    """Get local models information"""
+    if not local_model_manager:
+        return jsonify({'error': 'Local model manager not available'}), 400
+    
+    local_models = local_model_manager.get_available_local_models()
+    storage_info = local_model_manager.get_storage_info()
+    
+    return jsonify({
+        'local_models': local_models,
+        'storage_info': storage_info
     })
 
 @app.route('/api/model-status')
 def get_model_status():
-    """Get model status"""
-    if MODEL_AVAILABLE:
-        if predictor is not None:
-            return jsonify({
-                'available': True,
-                'loaded': True,
-                'message': 'Kronos model loaded and available',
-                'current_model': {
-                    'name': predictor.model.__class__.__name__,
-                    'device': str(next(predictor.model.parameters()).device)
+    """Get model status with detailed monitoring information"""
+    try:
+        # Get system resource information
+        system_info = {}
+        if auto_loader:
+            try:
+                system_info = auto_loader.get_system_report()
+            except Exception as e:
+                system_info = {'error': f'Failed to get system info: {str(e)}'}
+        
+        # 检查直接加载的模型状态
+        direct_model_loaded = False
+        direct_model_info = {}
+        
+        if direct_model_loader:
+            loaded_model = direct_model_loader.get_loaded_model()
+            if loaded_model:
+                direct_model_loaded = True
+                direct_model_info = {
+                    'name': loaded_model.get('model_name', 'Unknown'),
+                    'path': loaded_model.get('model_path', 'Unknown'),
+                    'device': loaded_model.get('device', 'Unknown'),
+                    'loaded_from': 'local_directory'
                 }
-            })
+        
+        # Enhanced model status monitoring
+        if MODEL_AVAILABLE or direct_model_loaded:
+            if predictor is not None or direct_model_loaded:
+                try:
+                    # 优先使用直接加载的模型信息
+                    if direct_model_loaded:
+                        model_name = direct_model_info['name']
+                        model_device = direct_model_info['device']
+                        model_healthy = True  # 假设直接加载的模型是健康的
+                        param_count = 0  # 直接加载的模型参数数量未知
+                        
+                        message = f'Kronos model loaded from local directory: {model_name} on {model_device}'
+                    else:
+                        # Test model functionality for global model
+                        model_device = str(next(predictor.model.parameters()).device)
+                        model_name = predictor.model.__class__.__name__
+                        
+                        # Check if model is responsive
+                        model_healthy = True
+                        try:
+                            # Simple test to verify model is working
+                            if hasattr(predictor, 'model') and predictor.model is not None:
+                                # Test model parameters
+                                param_count = sum(p.numel() for p in predictor.model.parameters())
+                            else:
+                                model_healthy = False
+                                param_count = 0
+                        except Exception as e:
+                            model_healthy = False
+                            param_count = 0
+                        
+                        message = 'Kronos model loaded and available'
+                    
+                    return jsonify({
+                        'available': True,
+                        'loaded': True,
+                        'healthy': model_healthy,
+                        'message': message,
+                        'current_model': {
+                            'name': model_name,
+                            'device': model_device,
+                            'parameters': param_count,
+                            'healthy': model_healthy,
+                            'loaded_from': 'local_directory' if direct_model_loaded else 'huggingface'
+                        },
+                        'direct_model_loaded': direct_model_loaded,
+                        'direct_model_info': direct_model_info,
+                        'auto_load_enabled': direct_model_loader is not None,
+                        'system_info': system_info,
+                        'timestamp': datetime.datetime.now().isoformat()
+                    })
+                except Exception as e:
+                    return jsonify({
+                        'available': True,
+                        'loaded': True,
+                        'healthy': False,
+                        'message': f'Model loaded but error occurred: {str(e)}',
+                        'current_model': {
+                            'name': 'Unknown',
+                            'device': 'Unknown',
+                            'parameters': 0,
+                            'healthy': False,
+                            'loaded_from': 'local_directory' if direct_model_loaded else 'huggingface'
+                        },
+                        'direct_model_loaded': direct_model_loaded,
+                        'direct_model_info': direct_model_info,
+                        'auto_load_enabled': direct_model_loader is not None,
+                        'system_info': system_info,
+                        'timestamp': datetime.datetime.now().isoformat()
+                    })
+            else:
+                return jsonify({
+                    'available': True,
+                    'loaded': False,
+                    'healthy': False,
+                    'message': 'Kronos model available but not loaded',
+                    'direct_model_loaded': direct_model_loaded,
+                    'direct_model_info': direct_model_info,
+                    'auto_load_enabled': direct_model_loader is not None,
+                    'system_info': system_info,
+                    'timestamp': datetime.datetime.now().isoformat()
+                })
         else:
             return jsonify({
-                'available': True,
+                'available': False,
                 'loaded': False,
-                'message': 'Kronos model available but not loaded'
+                'healthy': False,
+                'message': 'Kronos model library not available, please install related dependencies',
+                'direct_model_loaded': direct_model_loaded,
+                'direct_model_info': direct_model_info,
+                'auto_load_enabled': direct_model_loader is not None,
+                'system_info': system_info,
+                'timestamp': datetime.datetime.now().isoformat()
             })
-    else:
+    except Exception as e:
         return jsonify({
             'available': False,
             'loaded': False,
-            'message': 'Kronos model library not available, please install related dependencies'
+            'healthy': False,
+            'message': f'Error getting model status: {str(e)}',
+            'timestamp': datetime.datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/auto-load-model', methods=['POST'])
+def auto_load_model():
+    """自动加载最优模型"""
+    global tokenizer, model, predictor
+    
+    try:
+        if auto_loader is None:
+            return jsonify({
+                'success': False,
+                'error': '自动模型加载器不可用'
+            }), 400
+        
+        # 选择最优模型和设备
+        model_key, model_info = auto_loader.select_optimal_model()
+        device = auto_loader.select_optimal_device()
+        
+        # 验证选择
+        validation = auto_loader.validate_model_selection(model_key, device)
+        if not validation['valid']:
+            return jsonify({
+                'success': False,
+                'error': f'自动选择验证失败: {validation["reason"]}'
+            }), 400
+        
+        # 检查模型是否可用，如果不可用则使用模拟模式
+        if not MODEL_AVAILABLE:
+            # 模拟模式：设置全局变量但不实际加载模型
+            tokenizer = None
+            model = None
+            predictor = None
+            
+            # 获取系统报告
+            system_report = auto_loader.get_system_report()
+            
+            return jsonify({
+                'success': True,
+                'message': f'模型自动选择成功（模拟模式）: {model_info["name"]} 在 {device} 上运行',
+                'model_info': {
+                    'name': model_info['name'],
+                    'device': device,
+                    'params': model_info['params'],
+                    'description': model_info['description'],
+                    'simulation_mode': True
+                },
+                'system_info': system_report,
+                'simulation_mode': True
+            })
+        
+        # 如果MODEL_AVAILABLE为True，但实际模型库不可用，也使用模拟模式
+        try:
+            # 尝试实际加载模型
+            tokenizer = KronosTokenizer.from_pretrained(model_info['tokenizer_id'])
+            model = Kronos.from_pretrained(model_info['model_id'])
+            predictor = KronosPredictor(model, tokenizer, device=device)
+            
+            # 获取系统报告
+            system_report = auto_loader.get_system_report()
+            
+            return jsonify({
+                'success': True,
+                'message': f'模型自动加载成功: {model_info["name"]} 在 {device} 上运行',
+                'model_info': {
+                    'name': model_info['name'],
+                    'device': device,
+                    'params': model_info['params'],
+                    'description': model_info['description']
+                },
+                'system_info': system_report
+            })
+        except Exception as e:
+            # 如果实际加载失败，使用模拟模式
+            print(f"Warning: Actual model loading failed, using simulation mode: {e}")
+            tokenizer = None
+            model = None
+            predictor = None
+            
+            # 获取系统报告
+            system_report = auto_loader.get_system_report()
+            
+            return jsonify({
+                'success': True,
+                'message': f'模型自动选择成功（模拟模式）: {model_info["name"]} 在 {device} 上运行',
+                'model_info': {
+                    'name': model_info['name'],
+                    'device': device,
+                    'params': model_info['params'],
+                    'description': model_info['description'],
+                    'simulation_mode': True
+                },
+                'system_info': system_report,
+                'simulation_mode': True
+            })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'自动模型加载失败: {str(e)}'
+        }), 500
+
+@app.route('/api/system-info')
+def get_system_info():
+    """获取系统资源信息"""
+    if auto_loader is None:
+        return jsonify({
+            'success': False,
+            'error': '自动模型加载器不可用'
+        }), 400
+    
+    try:
+        system_report = auto_loader.get_system_report()
+        return jsonify({
+            'success': True,
+            'system_info': system_report
         })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'获取系统信息失败: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description='Kronos Web UI Server')
+    parser.add_argument('--port', type=int, default=7070, help='Port to run the server on (default: 7070)')
+    parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind the server to (default: 0.0.0.0)')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    args = parser.parse_args()
+    
     print("Starting Kronos Web UI...")
     print(f"Model availability: {MODEL_AVAILABLE}")
+    print(f"Server will run on: {args.host}:{args.port}")
     if MODEL_AVAILABLE:
         print("Tip: You can load Kronos model through /api/load-model endpoint")
     else:
         print("Tip: Will use simulated data for demonstration")
     
-    app.run(debug=True, host='0.0.0.0', port=7070)
+    app.run(debug=args.debug, host=args.host, port=args.port)

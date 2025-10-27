@@ -6,3 +6,11 @@ plotly==5.17.0
 torch>=2.1.0
 huggingface_hub==0.33.1
 transformers>=4.40.0
+
+# Kronos 2.0 新增依赖
+akshare>=1.12.0
+chinese-calendar>=1.8.0
+requests>=2.31.0
+cachetools>=5.3.0
+python-dateutil>=2.8.2
+psutil>=5.9.0
