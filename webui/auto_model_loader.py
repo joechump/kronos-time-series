@@ -51,7 +51,7 @@ class AutoModelLoader:
                 'gpu': gpu_info
             }
         except Exception as e:
-            print(f"Warning: Failed to get system info: {e}")
+            print(f"警告: 获取系统信息失败: {e}")
             return {
                 'cpu': {'count': 4, 'usage_percent': 50, 'cores': 4},
                 'memory': {'total_gb': 8, 'available_gb': 4, 'usage_percent': 50},
@@ -87,7 +87,7 @@ class AutoModelLoader:
             else:
                 return {'available': False}
         except Exception as e:
-            print(f"Warning: Failed to get GPU info: {e}")
+            print(f"警告: 获取GPU信息失败: {e}")
             return {'available': False}
     
     def _get_model_configs(self) -> Dict:

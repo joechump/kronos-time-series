@@ -6,28 +6,10 @@
     <title>Kronos 金融预测分析平台</title>
     <!-- 使用内联JavaScript库解决网络连接问题 -->
     <script>
-        // Clear browser cache for this session
-        if (window.performance && window.performance.navigation.type === window.performance.navigation.TYPE_RELOAD) {
-            console.log('🔄 强制刷新页面，清除缓存');
-        }
-        
         // 简化的axios替代方案
         const axios = {
             get: function(url) {
-                return fetch(url)
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        return { data: data };
-                    })
-                    .catch(error => {
-                        console.error('❌ Axios GET request failed:', error);
-                        throw error;
-                    });
+                return fetch(url).then(response => response.json());
             },
             post: function(url, data) {
                 return fetch(url, {
@@ -36,20 +18,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(data)
-                })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        return { data: data };
-                    })
-                    .catch(error => {
-                        console.error('❌ Axios POST request failed:', error);
-                        throw error;
-                    });
+                }).then(response => response.json());
             }
         };
         
@@ -1374,22 +1343,13 @@
                 const response = await axios.get('/api/model-status');
                 const status = response.data;
                 
-                // Add safety check for status object
-                if (!status) {
-                    updateModelStatusDisplay('error', '❌ 模型状态检查失败', '无法获取有效的模型状态信息');
-                    console.error('❌ Invalid model status response:', status);
-                    return;
-                }
-                
                 // Update model status display
                 if (status.loaded && status.healthy) {
-                    const modelName = status.current_model?.name || '未知模型';
-                    updateModelStatusDisplay('success', '✅ 模型加载成功', `模型 ${modelName} 已成功加载并准备就绪`);
+                    updateModelStatusDisplay('success', '✅ 模型加载成功', `模型 ${status.current_model.name} 已成功加载并准备就绪`);
                     document.getElementById('predict-btn').disabled = false;
                     console.log('✅ Model loaded successfully:', status.current_model);
                 } else if (status.loaded && !status.healthy) {
-                    const errorMessage = status.message || '未知错误';
-                    updateModelStatusDisplay('error', '❌ 模型加载异常', `模型加载完成但存在异常: ${errorMessage}`);
+                    updateModelStatusDisplay('error', '❌ 模型加载异常', `模型加载完成但存在异常: ${status.message}`);
                     console.error('❌ Model loaded but unhealthy:', status.message);
                 } else {
                     updateModelStatusDisplay('warning', '⚠️ 模型未加载', '系统正在自动加载模型，请稍候...');

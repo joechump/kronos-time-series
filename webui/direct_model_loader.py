@@ -102,6 +102,8 @@ class DirectModelLoader:
             print(f"正在加载模型 {model_key}，路径: {model_path}")
             
             # 动态导入必要的模块
+            import sys
+            sys.path.append('..')
             from model import Kronos, KronosTokenizer
             
             # 根据模型类型确定tokenizer路径
@@ -109,19 +111,67 @@ class DirectModelLoader:
             if model_key == 'kronos-mini':
                 tokenizer_path = self.models_dir / 'models--NeoQuasar--Kronos-Tokenizer-2k' / 'snapshots' / '26966d0035065a0cae0ebad7af8ece35bc1fb51c'
             elif model_key == 'kronos-small':
-                tokenizer_path = self.models_dir / 'models--NeoQuasar--Kronos-Tokenizer-base' / 'snapshots' / '26966d0035065a0cae0ebad7af8ece35bc1fb51c'
+                # kronos-small 应该使用 Kronos-Tokenizer-2k，因为 Kronos-Tokenizer-base 不存在
+                tokenizer_path = self.models_dir / 'models--NeoQuasar--Kronos-Tokenizer-2k' / 'snapshots' / '26966d0035065a0cae0ebad7af8ece35bc1fb51c'
             elif model_key == 'kronos-base':
-                tokenizer_path = self.models_dir / 'models--NeoQuasar--Kronos-Tokenizer-base' / 'snapshots' / '26966d0035065a0cae0ebad7af8ece35bc1fb51c'
+                # kronos-base 应该使用 Kronos-Tokenizer-2k，因为 Kronos-Tokenizer-base 不存在
+                tokenizer_path = self.models_dir / 'models--NeoQuasar--Kronos-Tokenizer-2k' / 'snapshots' / '26966d0035065a0cae0ebad7af8ece35bc1fb51c'
             
             # 检查tokenizer路径是否存在
             if tokenizer_path and tokenizer_path.exists():
                 print(f"加载tokenizer，路径: {tokenizer_path}")
-                tokenizer = KronosTokenizer.from_pretrained(str(tokenizer_path))
+                # 从配置文件加载参数，然后手动创建KronosTokenizer实例
+                import json
+                with open(tokenizer_path / 'config.json', 'r', encoding='utf-8') as f:
+                    tokenizer_config = json.load(f)
+                
+                # 使用配置参数创建KronosTokenizer实例
+                tokenizer = KronosTokenizer(
+                    d_in=tokenizer_config['d_in'],
+                    d_model=tokenizer_config['d_model'],
+                    n_heads=tokenizer_config['n_heads'],
+                    ff_dim=tokenizer_config['ff_dim'],
+                    n_enc_layers=tokenizer_config['n_enc_layers'],
+                    n_dec_layers=tokenizer_config['n_dec_layers'],
+                    ffn_dropout_p=tokenizer_config['ffn_dropout_p'],
+                    attn_dropout_p=tokenizer_config['attn_dropout_p'],
+                    resid_dropout_p=tokenizer_config['resid_dropout_p'],
+                    s1_bits=tokenizer_config['s1_bits'],
+                    s2_bits=tokenizer_config['s2_bits'],
+                    beta=tokenizer_config['beta'],
+                    gamma0=tokenizer_config['gamma0'],
+                    gamma=tokenizer_config['gamma'],
+                    zeta=tokenizer_config['zeta'],
+                    group_size=tokenizer_config['group_size']
+                )
                 print(f"Tokenizer加载成功")
             else:
                 # 如果tokenizer路径不存在，尝试从模型路径加载
                 print(f"使用模型路径加载tokenizer: {model_path}")
-                tokenizer = KronosTokenizer.from_pretrained(model_path)
+                # 从模型路径加载配置
+                import json
+                with open(model_path / 'config.json', 'r', encoding='utf-8') as f:
+                    model_config = json.load(f)
+                
+                # 使用模型配置创建KronosTokenizer实例
+                tokenizer = KronosTokenizer(
+                    d_in=6,  # 默认输入维度
+                    d_model=model_config['d_model'],
+                    n_heads=model_config['n_heads'],
+                    ff_dim=model_config['ff_dim'],
+                    n_enc_layers=4,  # 默认编码器层数
+                    n_dec_layers=4,  # 默认解码器层数
+                    ffn_dropout_p=model_config.get('ffn_dropout_p', 0.0),
+                    attn_dropout_p=model_config.get('attn_dropout_p', 0.0),
+                    resid_dropout_p=model_config.get('resid_dropout_p', 0.0),
+                    s1_bits=model_config['s1_bits'],
+                    s2_bits=model_config['s2_bits'],
+                    beta=0.05,  # 默认参数
+                    gamma0=1.0,  # 默认参数
+                    gamma=1.1,   # 默认参数
+                    zeta=0.05,   # 默认参数
+                    group_size=5  # 默认参数
+                )
                 print(f"Tokenizer加载成功")
             
             # 加载模型

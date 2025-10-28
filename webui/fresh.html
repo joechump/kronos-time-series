@@ -14,20 +14,7 @@
         // 简化的axios替代方案
         const axios = {
             get: function(url) {
-                return fetch(url)
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        return { data: data };
-                    })
-                    .catch(error => {
-                        console.error('❌ Axios GET request failed:', error);
-                        throw error;
-                    });
+                return fetch(url).then(response => response.json());
             },
             post: function(url, data) {
                 return fetch(url, {
@@ -36,20 +23,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(data)
-                })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        return { data: data };
-                    })
-                    .catch(error => {
-                        console.error('❌ Axios POST request failed:', error);
-                        throw error;
-                    });
+                }).then(response => response.json());
             }
         };
         

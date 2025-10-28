@@ -52,7 +52,7 @@ class LocalModelManager:
                 with open(self.metadata_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception as e:
-                logger.warning(f"Failed to load metadata: {e}")
+                logger.warning(f"加载元数据失败: {e}")
         
         return {
             'models': {},
@@ -66,7 +66,7 @@ class LocalModelManager:
             with open(self.metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(self.models_metadata, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            logger.error(f"Failed to save metadata: {e}")
+            logger.error(f"保存元数据失败: {e}")
     
     def get_model_path(self, model_id: str) -> Path:
         """获取模型本地路径"""
@@ -108,7 +108,7 @@ class LocalModelManager:
             # 创建模型目录
             model_path.mkdir(parents=True, exist_ok=True)
             
-            logger.info(f"Downloading model: {model_id}")
+            logger.info(f"正在下载模型: {model_id}")
             
             # 设置镜像源和重试机制
             original_hf_endpoint = os.environ.get('HF_ENDPOINT', '')
@@ -163,7 +163,7 @@ class LocalModelManager:
                     self.models_metadata['last_updated'] = str(Path(model_path).stat().st_ctime)
                     self._save_metadata()
                     
-                    logger.info(f"Model downloaded successfully: {model_id}")
+                    logger.info(f"模型下载成功: {model_id}")
                     return True, "下载成功"
                     
                 except Exception as e:
@@ -190,7 +190,7 @@ class LocalModelManager:
             return False, f"下载失败: {str(last_error)}"
             
         except Exception as e:
-            logger.error(f"Failed to download model {model_id}: {e}")
+            logger.error(f"下载模型失败 {model_id}: {e}")
             return False, f"下载失败: {str(e)}"
     
     def _get_directory_size(self, path: Path) -> int:
@@ -212,17 +212,17 @@ class LocalModelManager:
             
             model_path = self.get_model_path(model_id)
             
-            logger.info(f"Loading model from local: {model_id}")
+            logger.info(f"正在从本地加载模型: {model_id}")
             
             # 从本地加载模型
             model = AutoModel.from_pretrained(str(model_path))
             tokenizer = AutoTokenizer.from_pretrained(str(model_path))
             
-            logger.info(f"Model loaded successfully from local: {model_id}")
+            logger.info(f"从本地加载模型成功: {model_id}")
             return model, tokenizer
             
         except Exception as e:
-            logger.error(f"Failed to load model from local {model_id}: {e}")
+            logger.error(f"从本地加载模型失败 {model_id}: {e}")
             raise
     
     def get_available_local_models(self) -> List[Dict]:
