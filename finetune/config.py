@@ -2,7 +2,7 @@ import os
 
 class Config:
     """
-    Configuration class for the entire project.
+    整个项目的配置类。
     """
 
     def __init__(self):
@@ -75,7 +75,7 @@ class Config:
         self.use_comet = True # Set to False if you don't want to use Comet ML
         self.comet_config = {
             # It is highly recommended to load secrets from environment variables
-            # for security purposes. Example: os.getenv("COMET_API_KEY")
+            # for security purposes. 示例: os.getenv("COMET_API_KEY")
             "api_key": "YOUR_COMET_API_KEY",
             "project_name": "Kronos-Finetune-Demo",
             "workspace": "your_comet_workspace" # TODO: Change to your Comet ML workspace name
@@ -129,3 +129,54 @@ class Config:
             return dt_benchmark[instrument]
         else:
             raise ValueError(f"Benchmark not defined for instrument: {instrument}")
+
+    def get_training_config(self, model_name: str) -> dict:
+        """
+        获取指定模型的训练配置
+        
+        参数:
+            model_name (str): 模型名称
+            
+        返回:
+            dict: 训练配置字典
+        """
+    def get_data_config(self, data_type: str) -> dict:
+        """
+        获取指定数据类型的配置
+        
+        参数:
+            data_type (str): 数据类型
+            
+        返回:
+            dict: 数据配置字典
+        """
+    def get_optimizer_config(self, optimizer_name: str) -> dict:
+        """
+        获取指定优化器的配置
+        
+        参数:
+            optimizer_name (str): 优化器名称
+            
+        返回:
+            dict: 优化器配置字典
+        """
+    def get_scheduler_config(self, scheduler_name: str) -> dict:
+        """
+        获取指定学习率调度器的配置
+        
+        参数:
+            scheduler_name (str): 调度器名称
+            
+        返回:
+            dict: 调度器配置字典
+        """
+    def get_model_config(self, model_name: str) -> dict:
+        """
+        获取指定模型的配置
+        
+        参数:
+            model_name (str): 模型名称
+            
+        返回:
+            dict: 模型配置字典
+        """

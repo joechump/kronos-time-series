@@ -10,7 +10,21 @@ import sys
 import warnings
 import datetime
 import argparse
+import logging
 warnings.filterwarnings('ignore')
+
+# 导入并应用更加健壮的日志修复模块
+from logging_fix_robust import setup_logging, fix_windows_console_encoding, ensure_utf8_encoding
+
+# 确保UTF-8编码
+ensure_utf8_encoding()
+
+# 修复Windows控制台编码问题
+fix_windows_console_encoding()
+
+# 配置日志系统
+setup_logging()
+logger = logging.getLogger(__name__)
 
 # 添加项目根目录到系统路径，以便导入项目模块
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -78,12 +92,20 @@ except ImportError:
     print("警告: 无法导入Kronos模型，将使用模拟数据进行演示")
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # 全局变量存储模型
 tokenizer = None
 model = None
 predictor = None
+
+# 进度反馈全局变量
+prediction_progress = {
+    'current': 0,
+    'message': '',
+    'is_running': False,
+    'prediction_id': None
+}
 
 # 可用的模型配置
 AVAILABLE_MODELS = {
@@ -534,15 +556,20 @@ def search_stock():
     """
     try:
         if data_provider is None:
+            logger.warning("Akshare数据提供者不可用")
             return jsonify({'error': 'Akshare数据提供者不可用'}), 503
         
         data = request.get_json()
         keyword = data.get('keyword', '').strip()
         
+        logger.info(f"收到股票搜索请求: {keyword}")
+        
         if not keyword:
+            logger.warning("搜索关键词为空")
             return jsonify({'error': '搜索关键词不能为空'}), 400
         
         results = data_provider.search_stock(keyword)
+        logger.info(f"股票搜索完成: {keyword}, 结果数量: {len(results)}")
         
         return jsonify({
             'success': True,
@@ -551,6 +578,7 @@ def search_stock():
         })
         
     except Exception as e:
+        logger.error(f"股票搜索失败: {str(e)}", exc_info=True)
         return jsonify({'error': f'Stock search failed: {str(e)}'}), 500
 
 @app.route('/api/akshare/get-stock-data', methods=['POST'])
@@ -563,6 +591,7 @@ def get_stock_data():
     """
     try:
         if data_provider is None:
+            logger.warning("Akshare数据提供者不可用")
             return jsonify({'error': 'Akshare数据提供者不可用'}), 503
         
         data = request.get_json()
@@ -571,12 +600,16 @@ def get_stock_data():
         end_date = data.get('end_date', '')
         period = data.get('period', 'daily')  # daily, weekly, monthly
         
+        logger.info(f"收到获取股票数据请求: {symbol}, 周期: {period}, 日期范围: {start_date}-{end_date}")
+        
         if not symbol:
+            logger.warning("股票代码为空")
             return jsonify({'error': '股票代码不能为空'}), 400
         
         stock_data = data_provider.get_stock_data(symbol, period, start_date, end_date)
         
         if stock_data is None or stock_data.empty:
+            logger.warning(f"未找到股票代码 {symbol} 的数据")
             return jsonify({'error': f'未找到股票代码 {symbol} 的数据'}), 404
         
         # 转换为DataFrame进行处理
@@ -592,6 +625,8 @@ def get_stock_data():
             'sample_data': df.head(5).to_dict('records')
         }
         
+        logger.info(f"成功获取股票数据: {symbol}, 数据量: {len(df)}")
+        
         return jsonify({
             'success': True,
             'data': stock_data.to_dict('records'),
@@ -599,6 +634,7 @@ def get_stock_data():
         })
         
     except Exception as e:
+        logger.error(f"获取股票数据失败: {str(e)}", exc_info=True)
         return jsonify({'error': f'Failed to get stock data: {str(e)}'}), 500
 
 @app.route('/api/akshare/trading-calendar', methods=['GET'])
@@ -611,11 +647,14 @@ def get_trading_calendar():
     """
     try:
         if data_provider is None:
+            logger.warning("Akshare数据提供者不可用")
             return jsonify({'error': 'Akshare数据提供者不可用'}), 503
         
         year = request.args.get('year', str(datetime.now().year))
+        logger.info(f"收到获取交易日历请求，年份: {year}")
         
         calendar_data = data_provider.get_trading_calendar(year)
+        logger.info(f"成功获取{year}年交易日历，共{len(calendar_data)}个交易日")
         
         return jsonify({
             'success': True,
@@ -625,6 +664,7 @@ def get_trading_calendar():
         })
         
     except Exception as e:
+        logger.error(f"获取交易日历失败: {str(e)}", exc_info=True)
         return jsonify({'error': f'Failed to get trading calendar: {str(e)}'}), 500
 
 @app.route('/api/akshare/is-trading-day', methods=['GET'])
@@ -637,15 +677,19 @@ def is_trading_day():
     """
     try:
         if data_provider is None:
+            logger.warning("Akshare数据提供者不可用")
             return jsonify({'error': 'Akshare数据提供者不可用'}), 503
         
         data = request.get_json()
         date_str = data.get('date', '')
         
         if not date_str:
+            logger.warning("检查交易日请求中日期参数为空")
             return jsonify({'error': '日期不能为空'}), 400
         
+        logger.info(f"收到检查交易日请求，日期: {date_str}")
         is_trading = data_provider.is_trading_day(date_str)
+        logger.info(f"日期{date_str}是否为交易日: {is_trading}")
         
         return jsonify({
             'success': True,
@@ -654,27 +698,32 @@ def is_trading_day():
         })
         
     except Exception as e:
+        logger.error(f"检查交易日失败: {str(e)}", exc_info=True)
         return jsonify({'error': f'Failed to check trading day: {str(e)}'}), 500
 
 @app.route('/api/akshare/next-trading-day', methods=['GET'])
-def get_next_trading_day():
+def next_trading_day():
     """
     获取下一个交易日
     
     返回:
-        Response: JSON格式的下一个交易日信息
+        Response: JSON格式的下一个交易日数据
     """
     try:
         if data_provider is None:
+            logger.warning("Akshare数据提供者不可用")
             return jsonify({'error': 'Akshare数据提供者不可用'}), 503
         
         data = request.get_json()
         date_str = data.get('date', '')
         
         if not date_str:
+            logger.warning("获取下一个交易日请求中日期参数为空")
             return jsonify({'error': '日期不能为空'}), 400
         
+        logger.info(f"收到获取下一个交易日请求，日期: {date_str}")
         next_day = data_provider.get_next_trading_day(date_str)
+        logger.info(f"日期{date_str}的下一个交易日: {next_day}")
         
         return jsonify({
             'success': True,
@@ -683,6 +732,7 @@ def get_next_trading_day():
         })
         
     except Exception as e:
+        logger.error(f"获取下一个交易日失败: {str(e)}", exc_info=True)
         return jsonify({'error': f'Failed to get next trading day: {str(e)}'}), 500
 
 @app.route('/api/akshare/download-stock-data', methods=['POST'])
@@ -695,13 +745,17 @@ def download_stock_data():
     """
     try:
         if data_provider is None:
+            logger.warning("Akshare数据提供者不可用")
             return jsonify({'error': 'Akshare数据提供者不可用'}), 503
         
         data = request.get_json()
         symbol = data.get('symbol', '').strip()
         
         if not symbol:
+            logger.warning("下载股票数据请求中股票代码为空")
             return jsonify({'error': '股票代码不能为空'}), 400
+        
+        logger.info(f"收到下载股票数据请求，股票代码: {symbol}")
         
         # 计算近1年的日期范围
         end_date = datetime.datetime.now().strftime('%Y%m%d')
@@ -711,6 +765,7 @@ def download_stock_data():
         stock_data = data_provider.get_stock_data(symbol, 'daily', start_date, end_date)
         
         if stock_data is None or stock_data.empty:
+            logger.warning(f"未找到股票代码 {symbol} 的数据")
             return jsonify({'error': f'未找到股票代码 {symbol} 的数据'}), 404
         
         # 转换为DataFrame
@@ -727,6 +782,7 @@ def download_stock_data():
         
         # 保存为CSV文件
         df.to_csv(filepath, index=False, encoding='utf-8-sig')
+        logger.info(f"股票{symbol}数据下载完成，保存至{filename}，共{len(df)}条记录")
         
         # 准备数据信息
         data_info = {
@@ -747,7 +803,25 @@ def download_stock_data():
         })
         
     except Exception as e:
+        logger.error(f"下载股票数据失败: {str(e)}", exc_info=True)
         return jsonify({'error': f'股票数据下载失败: {str(e)}'}), 500
+
+@app.route('/api/prediction/progress', methods=['GET'])
+def get_prediction_progress():
+    """
+    获取当前预测进度
+    
+    返回:
+        Response: JSON格式的进度信息
+    """
+    global prediction_progress
+    
+    return jsonify({
+        'current': prediction_progress['current'],
+        'message': prediction_progress['message'],
+        'is_running': prediction_progress['is_running'],
+        'prediction_id': prediction_progress['prediction_id']
+    })
 
 @app.route('/api/predict', methods=['POST'])
 def predict():
@@ -757,6 +831,8 @@ def predict():
     返回:
         Response: JSON格式的预测结果，包含预测数据、图表和统计信息
     """
+    global prediction_progress
+    
     try:
         data = request.get_json()
         file_path = data.get('file_path')
@@ -767,6 +843,10 @@ def predict():
         temperature = float(data.get('temperature', 1.0))
         top_p = float(data.get('top_p', 0.9))
         sample_count = int(data.get('sample_count', 1))
+        
+        # 获取交易日历参数
+        trading_mode = data.get('trading_mode', 'calendar')
+        start_date = data.get('start_date')
         
         if not file_path:
             return jsonify({'error': '文件路径不能为空'}), 400
@@ -793,13 +873,38 @@ def predict():
             # 转换为DataFrame并进行预测处理
             df = pd.DataFrame(stock_data)
             
-            # 重命名列以匹配预测要求
-            if 'date' in df.columns:
+            # 重命名列以匹配预测要求 - 修复时间戳列名问题
+            if '日期' in df.columns:
+                df['timestamps'] = pd.to_datetime(df['日期'])
+                # 移除原始日期列以避免混淆
+                df = df.drop('日期', axis=1)
+            elif 'date' in df.columns:
                 df['timestamps'] = pd.to_datetime(df['date'])
                 # 移除原始日期列以避免混淆
                 df = df.drop('date', axis=1)
+            else:
+                # 如果没有找到日期列，尝试使用第一列作为日期
+                if len(df.columns) > 0:
+                    df['timestamps'] = pd.to_datetime(df.iloc[:, 0])
+                    df = df.drop(df.columns[0], axis=1)
+                else:
+                    return jsonify({'error': '无法找到日期列'}), 400
             
-            # 确保必需的列存在
+            # 确保必需的列存在 - 修复列名映射问题
+            column_mapping = {
+                '开盘': 'open',
+                '最高': 'high', 
+                '最低': 'low',
+                '收盘': 'close',
+                '成交量': 'volume'
+            }
+            
+            # 重命名列
+            for old_col, new_col in column_mapping.items():
+                if old_col in df.columns:
+                    df[new_col] = df[old_col]
+                    df = df.drop(old_col, axis=1)
+            
             required_cols = ['open', 'high', 'low', 'close']
             for col in required_cols:
                 if col not in df.columns:
@@ -815,6 +920,13 @@ def predict():
             # 移除包含NaN值的行
             df = df.dropna()
             
+            # 确保数据按时间戳排序
+            df = df.sort_values('timestamps')
+            
+            # 检查数据量是否足够
+            if len(df) < lookback + pred_len:
+                return jsonify({'error': f'实时股票数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(df)} 个可用'}), 400
+            
         else:
             # 从文件加载数据
             df, error = load_data_file(file_path)
@@ -828,6 +940,13 @@ def predict():
         # 优先使用直接加载的模型
         if direct_model_loader and direct_model_loader.get_loaded_model():
             try:
+                # 更新进度状态 - 开始预测
+                global prediction_progress
+                prediction_progress['current'] = 0
+                prediction_progress['message'] = '开始预测...'
+                prediction_progress['is_running'] = True
+                prediction_progress['prediction_id'] = str(datetime.datetime.now().timestamp())
+                
                 # Use directly loaded model
                 loaded_model = direct_model_loader.get_loaded_model()
                 predictor = KronosPredictor(loaded_model['model'], loaded_model['tokenizer'])
@@ -897,6 +1016,15 @@ def predict():
                 if isinstance(y_timestamp, pd.DatetimeIndex):
                     y_timestamp = pd.Series(y_timestamp, name='timestamps')
                 
+                # 创建进度回调函数
+                def progress_callback(progress, message):
+                    # 更新全局进度变量
+                    global prediction_progress
+                    prediction_progress['current'] = progress
+                    prediction_progress['message'] = message
+                    prediction_progress['is_running'] = True
+                    print(f"预测进度: {progress:.1f}% - {message}")
+                
                 pred_df = predictor.predict(
                     df=x_df,
                     x_timestamp=x_timestamp,
@@ -904,7 +1032,10 @@ def predict():
                     pred_len=pred_len,
                     T=temperature,
                     top_p=top_p,
-                    sample_count=sample_count
+                    sample_count=sample_count,
+                    trading_mode=trading_mode,
+                    start_date=start_date,
+                    progress_callback=progress_callback
                 )
                 
             except Exception as e:
@@ -966,7 +1097,9 @@ def predict():
                     pred_len=pred_len,
                     T=temperature,
                     top_p=top_p,
-                    sample_count=sample_count
+                    sample_count=sample_count,
+                    trading_mode=trading_mode,
+                    start_date=start_date
                 )
                 
             except Exception as e:
@@ -1095,6 +1228,11 @@ def predict():
         except Exception as e:
             print(f"Failed to save prediction results: {e}")
         
+        # 更新进度状态 - 预测完成
+        prediction_progress['current'] = 100
+        prediction_progress['message'] = '预测完成'
+        prediction_progress['is_running'] = False
+        
         return jsonify({
             'success': True,
             'prediction_type': prediction_type,
@@ -1106,6 +1244,11 @@ def predict():
         })
         
     except Exception as e:
+        # 更新进度状态 - 预测失败
+        prediction_progress['current'] = 0
+        prediction_progress['message'] = f'预测失败: {str(e)}'
+        prediction_progress['is_running'] = False
+        
         return jsonify({'error': f'预测失败: {str(e)}'}), 500
 
 @app.route('/api/load-model', methods=['POST'])
@@ -1120,6 +1263,7 @@ def load_model():
     
     try:
         if not MODEL_AVAILABLE:
+            logger.warning("Kronos模型库不可用")
             return jsonify({'error': 'Kronos模型库不可用'}), 400
         
         data = request.get_json()
@@ -1127,9 +1271,11 @@ def load_model():
         device = data.get('device', 'cpu')
         
         if model_key not in AVAILABLE_MODELS:
+            logger.warning(f"请求加载不支持的模型: {model_key}")
             return jsonify({'error': f'不支持的模型: {model_key}'}), 400
         
         model_config = AVAILABLE_MODELS[model_key]
+        logger.info(f"收到加载模型请求，模型: {model_config['name']}, 设备: {device}")
         
         # 严格本地优先策略：只从本地加载，不进行远程下载
         if local_model_manager and local_model_manager.is_model_available_locally(model_config['model_id']):
@@ -1137,10 +1283,11 @@ def load_model():
                 # 从本地加载模型
                 model, tokenizer = local_model_manager.load_model_from_local(model_config['model_id'])
                 load_source = "local"
-                print(f"✅ Model loaded from local storage: {model_config['model_id']}")
+                logger.info(f"✅ 模型从本地存储加载成功: {model_config['model_id']}")
                 
                 # Create predictor
                 predictor = KronosPredictor(model, tokenizer, device=device, max_context=model_config['context_length'])
+                logger.info(f"模型预测器创建成功，设备: {device}, 上下文长度: {model_config['context_length']}")
                 
                 return jsonify({
                     'success': True,
@@ -1155,13 +1302,14 @@ def load_model():
                 })
                 
             except Exception as e:
-                print(f"❌ Failed to load model from local: {e}")
+                logger.error(f"❌ 从本地加载模型失败: {e}", exc_info=True)
                 return jsonify({
                     'error': f'本地模型加载失败: {str(e)}。请先下载模型到本地。',
                     'suggestion': '请先使用"下载模型"功能将模型保存到本地'
                 }), 400
         else:
             # 本地模型不可用，提示用户先下载
+            logger.warning(f"模型 {model_config['name']} 在本地不可用，需要先下载")
             return jsonify({
                 'error': f'模型 {model_config["name"]} 在本地不可用',
                 'suggestion': '请先使用"下载模型"功能将模型保存到本地，然后重新加载',
@@ -1173,6 +1321,7 @@ def load_model():
             }), 400
         
     except Exception as e:
+        logger.error(f"模型加载失败: {str(e)}", exc_info=True)
         return jsonify({'error': f'模型加载失败: {str(e)}'}), 500
 
 @app.route('/api/available-models')
@@ -1209,38 +1358,45 @@ def download_model():
     """
     try:
         if not local_model_manager:
+            logger.warning("本地模型管理器不可用")
             return jsonify({'error': '本地模型管理器不可用'}), 400
         
         data = request.get_json()
         model_key = data.get('model_key', 'kronos-small')
         
         if model_key not in AVAILABLE_MODELS:
+            logger.warning(f"请求下载不支持的模型: {model_key}")
             return jsonify({'error': f'不支持的模型: {model_key}'}), 400
         
         model_config = AVAILABLE_MODELS[model_key]
+        logger.info(f"收到下载模型请求，模型: {model_config['name']}")
         
         # 检查网络连接
         try:
             import requests
             response = requests.get('https://huggingface.co', timeout=10)
             if response.status_code != 200:
+                logger.warning("网络连接异常，无法访问Hugging Face")
                 return jsonify({
                     'error': '网络连接异常，无法访问Hugging Face。请检查网络连接或使用镜像源。',
                     'suggestion': '可以尝试设置环境变量 HF_ENDPOINT=https://hf-mirror.com 使用镜像源'
                 }), 503
         except Exception as network_error:
+            logger.warning(f"网络连接失败: {str(network_error)}")
             return jsonify({
                 'error': f'网络连接失败: {str(network_error)}',
                 'suggestion': '请检查网络连接，或使用镜像源下载。系统将自动尝试镜像源。'
             }), 503
         
         # 下载模型到本地
+        logger.info(f"开始下载模型: {model_config['model_id']}")
         success, message = local_model_manager.download_model(
             model_config['model_id'],
             model_config['tokenizer_id']
         )
         
         if success:
+            logger.info(f"模型下载成功: {model_config['name']}")
             return jsonify({
                 'success': True,
                 'message': f'模型下载成功: {model_config["name"]}',
@@ -1254,6 +1410,7 @@ def download_model():
             })
         else:
             # 提供更详细的错误信息和建议
+            logger.warning(f"模型下载失败: {message}")
             error_details = {
                 'error': message,
                 'suggestions': [
@@ -1266,6 +1423,7 @@ def download_model():
             return jsonify(error_details), 500
             
     except Exception as e:
+        logger.error(f"模型下载失败: {str(e)}", exc_info=True)
         return jsonify({
             'error': f'模型下载失败: {str(e)}',
             'suggestion': '请检查网络连接和模型配置'
@@ -1298,6 +1456,7 @@ def get_model_status():
     返回:
         Response: JSON格式的模型状态信息，包含系统资源和健康状态
     """
+    logger.info("收到获取模型状态的请求")
     try:
         # 获取系统资源信息
         system_info = {}
@@ -1305,7 +1464,10 @@ def get_model_status():
             try:
                 system_info = auto_loader.get_system_report()
             except Exception as e:
+                logger.warning(f"获取系统信息失败: {str(e)}")
                 system_info = {'error': f'获取系统信息失败: {str(e)}'}
+        else:
+            logger.warning("自动加载器不可用")
         
         # 检查直接加载的模型状态
         direct_model_loaded = False
@@ -1321,9 +1483,13 @@ def get_model_status():
                     'device': loaded_model.get('device', 'Unknown'),
                     'loaded_from': 'local_directory'
                 }
+                logger.info(f"检测到已加载的模型: {direct_model_info['name']}")
+        else:
+            logger.warning("直接模型加载器不可用")
         
         # Enhanced model status monitoring
         if MODEL_AVAILABLE or direct_model_loaded:
+            logger.info(f"模型可用状态: MODEL_AVAILABLE={MODEL_AVAILABLE}, direct_model_loaded={direct_model_loaded}")
             if predictor is not None or direct_model_loaded:
                 try:
                     # 优先使用直接加载的模型信息
@@ -1334,6 +1500,7 @@ def get_model_status():
                         param_count = 0  # 直接加载的模型参数数量未知
                         
                         message = f'Kronos模型已从本地目录加载: {model_name} 在 {model_device} 上运行'
+                        logger.info(f"使用直接加载的模型: {model_name} on {model_device}")
                     else:
                         # Test model functionality for global model
                         model_device = str(next(predictor.model.parameters()).device)
@@ -1350,12 +1517,30 @@ def get_model_status():
                                 model_healthy = False
                                 param_count = 0
                         except Exception as e:
+                            logger.warning(f"模型参数检查失败: {str(e)}")
                             model_healthy = False
                             param_count = 0
                         
                         message = 'Kronos模型已加载并可用'
+                        logger.info(f"使用全局模型: {model_name} on {model_device}")
                     
-                    return jsonify({
+                    # 确保响应数据中的中文字符正确编码
+                    system_info_encoded = system_info.copy()
+                    if 'available_models' in system_info_encoded:
+                        for model_key, model_config in system_info_encoded['available_models'].items():
+                            if 'description' in model_config:
+                                try:
+                                    # 确保描述信息是正确编码的字符串
+                                    description = model_config['description']
+                                    if isinstance(description, str):
+                                        # 尝试编码和解码以确保正确性
+                                        encoded_description = description.encode('utf-8').decode('utf-8')
+                                        system_info_encoded['available_models'][model_key]['description'] = encoded_description
+                                except UnicodeError:
+                                    # 如果编码失败，使用原始值
+                                    pass
+                    
+                    response_data = {
                         'available': True,
                         'loaded': True,
                         'healthy': model_healthy,
@@ -1370,11 +1555,16 @@ def get_model_status():
                         'direct_model_loaded': direct_model_loaded,
                         'direct_model_info': direct_model_info,
                         'auto_load_enabled': direct_model_loader is not None,
-                        'system_info': system_info,
+                        'system_info': system_info_encoded,
                         'timestamp': datetime.datetime.now().isoformat()
-                    })
+                    }
+                    # 使用json.dumps确保正确序列化
+                    import json
+                    logger.info(f"模型状态响应: {json.dumps(response_data, ensure_ascii=False)}")
+                    return jsonify(response_data)
                 except Exception as e:
-                    return jsonify({
+                    logger.error(f"模型状态检查过程中发生错误: {str(e)}", exc_info=True)
+                    error_response = {
                         'available': True,
                         'loaded': True,
                         'healthy': False,
@@ -1391,39 +1581,52 @@ def get_model_status():
                         'auto_load_enabled': direct_model_loader is not None,
                         'system_info': system_info,
                         'timestamp': datetime.datetime.now().isoformat()
-                    })
+                    }
+                    logger.info(f"模型状态错误响应: {error_response}")
+                    return jsonify(error_response)
             else:
-                return jsonify({
+                message = 'Kronos模型可用但未加载'
+                logger.warning(message)
+                response_data = {
                     'available': True,
                     'loaded': False,
                     'healthy': False,
-                    'message': 'Kronos模型可用但未加载',
+                    'message': message,
                     'direct_model_loaded': direct_model_loaded,
                     'direct_model_info': direct_model_info,
                     'auto_load_enabled': direct_model_loader is not None,
                     'system_info': system_info,
                     'timestamp': datetime.datetime.now().isoformat()
-                })
+                }
+                logger.info(f"模型状态响应: {response_data}")
+                return jsonify(response_data)
         else:
-            return jsonify({
+            message = 'Kronos模型库不可用，请安装相关依赖'
+            logger.warning(message)
+            response_data = {
                 'available': False,
                 'loaded': False,
                 'healthy': False,
-                'message': 'Kronos模型库不可用，请安装相关依赖',
+                'message': message,
                 'direct_model_loaded': direct_model_loaded,
                 'direct_model_info': direct_model_info,
                 'auto_load_enabled': direct_model_loader is not None,
                 'system_info': system_info,
                 'timestamp': datetime.datetime.now().isoformat()
-            })
+            }
+            logger.info(f"模型状态响应: {response_data}")
+            return jsonify(response_data)
     except Exception as e:
-        return jsonify({
+        logger.error(f"获取模型状态时发生未预期错误: {str(e)}", exc_info=True)
+        error_response = {
             'available': False,
             'loaded': False,
             'healthy': False,
             'message': f'获取模型状态时发生错误: {str(e)}',
             'timestamp': datetime.datetime.now().isoformat()
-        }), 500
+        }
+        logger.info(f"模型状态错误响应: {error_response}")
+        return jsonify(error_response), 500
 
 @app.route('/api/auto-load-model', methods=['POST'])
 def auto_load_model():
@@ -1435,27 +1638,40 @@ def auto_load_model():
     """
     global tokenizer, model, predictor
     
+    logger.info("收到自动加载模型的请求")
     try:
         if auto_loader is None:
-            return jsonify({
+            logger.warning("自动模型加载器不可用")
+            error_response = {
                 'success': False,
                 'error': '自动模型加载器不可用'
-            }), 400
+            }
+            logger.info(f"自动加载模型错误响应: {error_response}")
+            return jsonify(error_response), 400
         
         # 选择最优模型和设备
+        logger.info("开始选择最优模型和设备")
         model_key, model_info = auto_loader.select_optimal_model()
         device = auto_loader.select_optimal_device()
+        logger.info(f"选择的模型: {model_info['name']}, 设备: {device}")
         
         # 验证选择
+        logger.info("验证模型选择")
         validation = auto_loader.validate_model_selection(model_key, device)
         if not validation['valid']:
-            return jsonify({
+            error_message = f'自动选择验证失败: {validation["reason"]}'
+            logger.warning(error_message)
+            error_response = {
                 'success': False,
-                'error': f'自动选择验证失败: {validation["reason"]}'
-            }), 400
+                'error': error_message
+            }
+            logger.info(f"自动加载模型错误响应: {error_response}")
+            return jsonify(error_response), 400
         
         # 检查模型是否可用，如果不可用则使用模拟模式
+        logger.info(f"检查模型可用性: MODEL_AVAILABLE={MODEL_AVAILABLE}")
         if not MODEL_AVAILABLE:
+            logger.info("模型不可用，使用模拟模式")
             # 模拟模式：设置全局变量但不实际加载模型
             tokenizer = None
             model = None
@@ -1464,9 +1680,27 @@ def auto_load_model():
             # 获取系统报告
             system_report = auto_loader.get_system_report()
             
-            return jsonify({
+            message = f'模型自动选择成功（模拟模式）: {model_info["name"]} 在 {device} 上运行'
+            logger.info(message)
+            # 确保系统报告中的中文字符正确编码
+            system_report_encoded = system_report.copy()
+            if 'available_models' in system_report_encoded:
+                for model_key, model_config in system_report_encoded['available_models'].items():
+                    if 'description' in model_config:
+                        try:
+                            # 确保描述信息是正确编码的字符串
+                            description = model_config['description']
+                            if isinstance(description, str):
+                                # 尝试编码和解码以确保正确性
+                                encoded_description = description.encode('utf-8').decode('utf-8')
+                                system_report_encoded['available_models'][model_key]['description'] = encoded_description
+                        except UnicodeError:
+                            # 如果编码失败，使用原始值
+                            pass
+            
+            response_data = {
                 'success': True,
-                'message': f'模型自动选择成功（模拟模式）: {model_info["name"]} 在 {device} 上运行',
+                'message': message,
                 'model_info': {
                     'name': model_info['name'],
                     'device': device,
@@ -1474,33 +1708,64 @@ def auto_load_model():
                     'description': model_info['description'],
                     'simulation_mode': True
                 },
-                'system_info': system_report,
+                'system_info': system_report_encoded,
                 'simulation_mode': True
-            })
+            }
+            # 使用json.dumps确保正确序列化
+            import json
+            logger.info(f"自动加载模型响应: {json.dumps(response_data, ensure_ascii=False)}")
+            return jsonify(response_data)
         
         # 如果MODEL_AVAILABLE为True，但实际模型库不可用，也使用模拟模式
+        logger.info("尝试实际加载模型")
         try:
             # 尝试实际加载模型
+            logger.info(f"加载tokenizer: {model_info['tokenizer_id']}")
             tokenizer = KronosTokenizer.from_pretrained(model_info['tokenizer_id'])
+            logger.info(f"加载模型: {model_info['model_id']}")
             model = Kronos.from_pretrained(model_info['model_id'])
+            logger.info(f"创建预测器，设备: {device}")
             predictor = KronosPredictor(model, tokenizer, device=device)
             
             # 获取系统报告
             system_report = auto_loader.get_system_report()
             
-            return jsonify({
+            message = f'模型自动加载成功: {model_info["name"]} 在 {device} 上运行'
+            logger.info(message)
+            # 确保系统报告中的中文字符正确编码
+            system_report_encoded = system_report.copy()
+            if 'available_models' in system_report_encoded:
+                for model_key, model_config in system_report_encoded['available_models'].items():
+                    if 'description' in model_config:
+                        try:
+                            # 确保描述信息是正确编码的字符串
+                            description = model_config['description']
+                            if isinstance(description, str):
+                                # 尝试编码和解码以确保正确性
+                                encoded_description = description.encode('utf-8').decode('utf-8')
+                                system_report_encoded['available_models'][model_key]['description'] = encoded_description
+                        except UnicodeError:
+                            # 如果编码失败，使用原始值
+                            pass
+            
+            response_data = {
                 'success': True,
-                'message': f'模型自动加载成功: {model_info["name"]} 在 {device} 上运行',
+                'message': message,
                 'model_info': {
                     'name': model_info['name'],
                     'device': device,
                     'params': model_info['params'],
                     'description': model_info['description']
                 },
-                'system_info': system_report
-            })
+                'system_info': system_report_encoded
+            }
+            # 使用json.dumps确保正确序列化
+            import json
+            logger.info(f"自动加载模型响应: {json.dumps(response_data, ensure_ascii=False)}")
+            return jsonify(response_data)
         except Exception as e:
             # 如果实际加载失败，使用模拟模式
+            logger.warning(f"实际模型加载失败，使用模拟模式: {e}", exc_info=True)
             print(f"警告: 实际模型加载失败，使用模拟模式: {e}")
             tokenizer = None
             model = None
@@ -1509,9 +1774,27 @@ def auto_load_model():
             # 获取系统报告
             system_report = auto_loader.get_system_report()
             
-            return jsonify({
+            message = f'模型自动选择成功（模拟模式）: {model_info["name"]} 在 {device} 上运行'
+            logger.info(message)
+            # 确保系统报告中的中文字符正确编码
+            system_report_encoded = system_report.copy()
+            if 'available_models' in system_report_encoded:
+                for model_key, model_config in system_report_encoded['available_models'].items():
+                    if 'description' in model_config:
+                        try:
+                            # 确保描述信息是正确编码的字符串
+                            description = model_config['description']
+                            if isinstance(description, str):
+                                # 尝试编码和解码以确保正确性
+                                encoded_description = description.encode('utf-8').decode('utf-8')
+                                system_report_encoded['available_models'][model_key]['description'] = encoded_description
+                        except UnicodeError:
+                            # 如果编码失败，使用原始值
+                            pass
+            
+            response_data = {
                 'success': True,
-                'message': f'模型自动选择成功（模拟模式）: {model_info["name"]} 在 {device} 上运行',
+                'message': message,
                 'model_info': {
                     'name': model_info['name'],
                     'device': device,
@@ -1519,15 +1802,22 @@ def auto_load_model():
                     'description': model_info['description'],
                     'simulation_mode': True
                 },
-                'system_info': system_report,
+                'system_info': system_report_encoded,
                 'simulation_mode': True
-            })
+            }
+            # 使用json.dumps确保正确序列化
+            import json
+            logger.info(f"自动加载模型响应: {json.dumps(response_data, ensure_ascii=False)}")
+            return jsonify(response_data)
         
     except Exception as e:
-        return jsonify({
+        logger.error(f"自动模型加载过程中发生未预期错误: {str(e)}", exc_info=True)
+        error_response = {
             'success': False,
             'error': f'自动模型加载失败: {str(e)}'
-        }), 500
+        }
+        logger.info(f"自动加载模型错误响应: {error_response}")
+        return jsonify(error_response), 500
 
 @app.route('/api/system-info')
 def get_system_info():

@@ -8,14 +8,13 @@ import torch.distributed as dist
 
 def setup_ddp():
     """
-    Initializes the distributed data parallel environment.
+    初始化分布式数据并行环境。
 
-    This function relies on environment variables set by `torchrun` or a similar
-    launcher. It initializes the process group and sets the CUDA device for the
-    current process.
+    此函数依赖于`torchrun`或类似启动器设置的环境变量。
+    它初始化进程组并为当前进程设置CUDA设备。
 
-    Returns:
-        tuple: A tuple containing (rank, world_size, local_rank).
+    返回:
+        tuple: 包含(rank, world_size, local_rank)的元组。
     """
     if not dist.is_available():
         raise RuntimeError("torch.distributed is not available.")
@@ -33,19 +32,19 @@ def setup_ddp():
 
 
 def cleanup_ddp():
-    """Cleans up the distributed process group."""
+    """清理分布式进程组。"""
     if dist.is_initialized():
         dist.destroy_process_group()
 
 
 def set_seed(seed: int, rank: int = 0):
     """
-    Sets the random seed for reproducibility across all relevant libraries.
+    为所有相关库设置随机种子以确保可重现性。
 
-    Args:
-        seed (int): The base seed value.
-        rank (int): The process rank, used to ensure different processes have
-                    different seeds, which can be important for data loading.
+    参数:
+        seed (int): 基础种子值。
+        rank (int): 进程排名，用于确保不同进程具有不同的种子，
+                    这对于数据加载可能很重要。
     """
     actual_seed = seed + rank
     random.seed(actual_seed)
@@ -61,14 +60,13 @@ def set_seed(seed: int, rank: int = 0):
 
 def get_model_size(model: torch.nn.Module) -> str:
     """
-    Calculates the number of trainable parameters in a PyTorch model and returns
-    it as a human-readable string.
+    计算PyTorch模型中可训练参数的数量，并以人类可读的字符串形式返回。
 
-    Args:
-        model (torch.nn.Module): The PyTorch model.
+    参数:
+        model (torch.nn.Module): PyTorch模型。
 
-    Returns:
-        str: A string representing the model size (e.g., "175.0B", "7.1M", "50.5K").
+    返回:
+        str: 表示模型大小的字符串（例如"175.0B"、"7.1M"、"50.5K"）。
     """
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -82,16 +80,16 @@ def get_model_size(model: torch.nn.Module) -> str:
 
 def reduce_tensor(tensor: torch.Tensor, world_size: int, op=dist.ReduceOp.SUM) -> torch.Tensor:
     """
-    Reduces a tensor's value across all processes in a distributed setup.
+    在分布式设置中跨所有进程减少张量的值。
 
-    Args:
-        tensor (torch.Tensor): The tensor to be reduced.
-        world_size (int): The total number of processes.
-        op (dist.ReduceOp, optional): The reduction operation (SUM, AVG, etc.).
-                                      Defaults to dist.ReduceOp.SUM.
+    参数:
+        tensor (torch.Tensor): 要减少的张量。
+        world_size (int): 进程总数。
+        op (dist.ReduceOp, 可选): 减少操作（SUM、AVG等）。
+                                  默认为dist.ReduceOp.SUM。
 
-    Returns:
-        torch.Tensor: The reduced tensor, which will be identical on all processes.
+    返回:
+        torch.Tensor: 减少后的张量，在所有进程上将是相同的。
     """
     rt = tensor.clone()
     dist.all_reduce(rt, op=op)
@@ -104,13 +102,13 @@ def reduce_tensor(tensor: torch.Tensor, world_size: int, op=dist.ReduceOp.SUM) -
 
 def format_time(seconds: float) -> str:
     """
-    Formats a duration in seconds into a human-readable H:M:S string.
+    将秒数格式化为人类可读的H:M:S字符串。
 
-    Args:
-        seconds (float): The total seconds.
+    参数:
+        seconds (float): 总秒数。
 
-    Returns:
-        str: The formatted time string (e.g., "0:15:32").
+    返回:
+        str: 格式化后的时间字符串（例如"0:15:32"）。
     """
     return str(datetime.timedelta(seconds=int(seconds)))
 

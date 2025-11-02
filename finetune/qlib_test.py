@@ -31,11 +31,11 @@ from model.kronos import Kronos, KronosTokenizer, auto_regressive_inference
 
 class QlibTestDataset(Dataset):
     """
-    PyTorch Dataset for handling Qlib test data, specifically for inference.
+    用于处理Qlib测试数据的PyTorch数据集，专门用于推理。
 
-    This dataset iterates through all possible sliding windows sequentially. It also
-    yields metadata like symbol and timestamp, which are crucial for mapping
-    predictions back to the original time series.
+    该数据集按顺序遍历所有可能的滑动窗口。它还
+    生成符号和时间戳等元数据，这对于将预测
+    映射回原始时间序列至关重要。
     """
 
     def __init__(self, data: dict, config: Config):
@@ -95,7 +95,9 @@ class QlibTestDataset(Dataset):
 
 class QlibBacktest:
     """
-    A wrapper class for conducting backtesting experiments using Qlib.
+    使用Qlib进行回测实验的包装类。
+
+    该类简化了使用Qlib内置回测框架设置和运行回测的过程。
     """
 
     def __init__(self, config: Config):
@@ -109,12 +111,10 @@ class QlibBacktest:
 
     def run_single_backtest(self, signal_series: pd.Series) -> pd.DataFrame:
         """
-        Runs a single backtest for a given prediction signal.
-
-        Args:
+        参数:
             signal_series (pd.Series): A pandas Series with a MultiIndex
                                        (instrument, datetime) and prediction scores.
-        Returns:
+        返回:
             pd.DataFrame: A DataFrame containing the performance report.
         """
         strategy = TopkDropoutStrategy(
@@ -165,7 +165,7 @@ class QlibBacktest:
         """
         Runs backtests for multiple signals and plots the cumulative return curves.
 
-        Args:
+        参数:
             signals (dict[str, pd.DataFrame]): A dictionary where keys are signal names
                                                and values are prediction DataFrames.
         """
@@ -205,7 +205,7 @@ class QlibBacktest:
 # =================================================================================
 
 def load_models(config: dict) -> tuple[KronosTokenizer, Kronos]:
-    """Loads the fine-tuned tokenizer and predictor model."""
+    """加载微调后的分词器和预测器模型。"""
     device = torch.device(config['device'])
     print(f"Loading models onto device: {device}...")
     tokenizer = KronosTokenizer.from_pretrained(config['tokenizer_path']).to(device).eval()
@@ -215,14 +215,13 @@ def load_models(config: dict) -> tuple[KronosTokenizer, Kronos]:
 
 def collate_fn_for_inference(batch):
     """
-    Custom collate function to handle batches containing Tensors, strings, and Timestamps.
+    自定义的collate函数，用于处理包含张量、字符串和时间戳的批次。
 
-    Args:
-        batch (list): A list of samples, where each sample is the tuple returned by
-                      QlibTestDataset.__getitem__.
+    参数:
+        batch (list): 样本列表，每个样本是QlibTestDataset.__getitem__返回的元组。
 
-    Returns:
-        A single tuple containing the batched data.
+    返回:
+        包含批次数据的单个元组。
     """
     # Unzip the list of samples into separate lists for each data type
     x, x_stamp, y_stamp, symbols, timestamps = zip(*batch)
@@ -238,15 +237,15 @@ def collate_fn_for_inference(batch):
 
 def generate_predictions(config: dict, test_data: dict) -> dict[str, pd.DataFrame]:
     """
-    Runs inference on the test dataset to generate prediction signals.
+    在测试数据集上运行推理以生成预测信号。
 
-    Args:
-        config (dict): A dictionary containing inference parameters.
-        test_data (dict): The raw test data loaded from a pickle file.
+    参数:
+        config (dict): 包含推理参数的字典。
+        test_data (dict): 从pickle文件加载的原始测试数据。
 
-    Returns:
-        A dictionary where keys are signal types (e.g., 'mean', 'last') and
-        values are DataFrames of predictions (datetime index, symbol columns).
+    返回:
+        一个字典，其中键是信号类型（如'mean'、'last'），
+        值是预测的DataFrame（日期时间索引，符号列）。
     """
     tokenizer, model = load_models(config)
     device = torch.device(config['device'])

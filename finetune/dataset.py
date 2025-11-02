@@ -8,16 +8,16 @@ from config import Config
 
 class QlibDataset(Dataset):
     """
-    A PyTorch Dataset for handling Qlib financial time series data.
+    用于处理Qlib金融时间序列数据的PyTorch数据集。
 
-    This dataset pre-computes all possible start indices for sliding windows
-    and then randomly samples from them during training/validation.
+    该数据集预先计算滑动窗口的所有可能起始索引，
+    然后在训练/验证期间随机从中采样。
 
-    Args:
-        data_type (str): The type of dataset to load, either 'train' or 'val'.
+    参数:
+        data_type (str): 要加载的数据集类型，'train'或'val'。
 
-    Raises:
-        ValueError: If `data_type` is not 'train' or 'val'.
+    异常:
+        ValueError: 如果`data_type`不是'train'或'val'。
     """
 
     def __init__(self, data_type: str = 'train'):
@@ -79,7 +79,7 @@ class QlibDataset(Dataset):
         Sets a new seed for the random sampler for each epoch. This is crucial
         for reproducibility in distributed training.
 
-        Args:
+        参数:
             epoch (int): The current epoch number.
         """
         epoch_seed = self.config.seed + epoch
@@ -97,10 +97,10 @@ class QlibDataset(Dataset):
         from the pre-computed `self.indices` list using `self.py_rng`. This
         ensures random sampling over the entire dataset for each call.
 
-        Args:
+        参数:
             idx (int): Ignored.
 
-        Returns:
+        返回:
             tuple[torch.Tensor, torch.Tensor]: A tuple containing:
                 - x_tensor (torch.Tensor): The normalized feature tensor.
                 - x_stamp_tensor (torch.Tensor): The time feature tensor.

@@ -224,11 +224,20 @@ class DirectModelLoader:
     def get_loaded_model(self, model_key: str = None):
         """获取已加载的模型"""
         if model_key:
-            return self.loaded_models.get(model_key)
+            model_data = self.loaded_models.get(model_key)
+            if model_data:
+                # 确保返回的字典包含model_name和model_path字段
+                model_data['model_name'] = model_data.get('config', {}).get('name', model_key)
+                model_data['model_path'] = model_data.get('config', {}).get('local_path', 'Unknown')
+            return model_data
         
         # 返回第一个加载的模型
         if self.loaded_models:
-            return next(iter(self.loaded_models.values()))
+            model_data = next(iter(self.loaded_models.values()))
+            # 确保返回的字典包含model_name和model_path字段
+            model_data['model_name'] = model_data.get('config', {}).get('name', list(self.loaded_models.keys())[0])
+            model_data['model_path'] = model_data.get('config', {}).get('local_path', 'Unknown')
+            return model_data
         
         return None
     

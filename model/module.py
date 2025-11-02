@@ -8,8 +8,26 @@ import torch.nn.functional as F
 
 
 class DifferentiableEntropyFunction(Function):
+    """
+    可微分熵函数类
+    
+    功能：实现可微分的熵计算，用于量化器的熵损失计算
+    特点：支持前向传播和反向传播，可用于梯度优化
+    """
     @staticmethod
     def forward(ctx, zq, basis, K, eps):
+        """
+        前向传播函数：计算可微分熵
+        
+        参数:
+            zq: 量化后的张量
+            basis: 基础向量
+            K: 维度数
+            eps: 平滑因子
+        
+        返回:
+            H: 计算得到的熵值
+        """
         zb = (zq + 1) / 2
         zi = ((zb * basis).sum(-1)).to(torch.int64)
         cnt = torch.scatter_reduce(torch.zeros(2 ** K, device=zq.device, dtype=zq.dtype),
@@ -25,6 +43,15 @@ class DifferentiableEntropyFunction(Function):
 
     @staticmethod
     def backward(ctx, grad_output):
+        """
+        反向传播函数：计算熵的梯度
+        
+        参数:
+            grad_output: 来自上一层的梯度
+        
+        返回:
+            grad_input: 输入张量的梯度
+        """
         zq, zi, prob = ctx.saved_tensors
         grad_array = -grad_output * (torch.log(prob) + 1) / zi.numel() / ctx.K
         reord_grad = grad_array[zi.flatten()].reshape(zi.shape)
@@ -33,10 +60,32 @@ class DifferentiableEntropyFunction(Function):
 
 
 def codebook_entropy(zq, basis, K, eps=1e-4):
+    """
+    计算码本熵的便捷函数
+    
+    参数:
+        zq: 量化后的张量
+        basis: 基础向量
+        K: 维度数
+        eps: 平滑因子
+    
+    返回:
+        码本熵值
+    """
     return DifferentiableEntropyFunction.apply(zq, basis, K, eps)
 
 
 class BinarySphericalQuantizer(nn.Module):
+    """
+    二进制球面量化器类
+    
+    功能：实现基于球面投影的二进制量化，用于特征压缩和表示学习
+    特点：支持软熵计算、分组熵近似、L2归一化等高级特性
+    应用：主要用于时间序列数据的量化表示学习
+    
+    论文链接: https://arxiv.org/pdf/2406.07548.pdf
+    这里我们使用BinarySphericalQuantizer的官方实现。
+    """
     def __init__(self, embed_dim, beta, gamma0, gamma, zeta,
                  input_format='bchw',
                  soft_entropy=True, group_size=9,
@@ -45,15 +94,15 @@ class BinarySphericalQuantizer(nn.Module):
                  l2_norm=True,
                  inv_temperature=1):
         """
-        Paper link: https://arxiv.org/pdf/2406.07548.pdf
-        Here we use the official implementation of the BinarySphericalQuantizer.
+        论文链接: https://arxiv.org/pdf/2406.07548.pdf
+        这里我们使用BinarySphericalQuantizer的官方实现。
         """
         super().__init__()
         self.embed_dim = embed_dim
-        self.beta = beta  # loss weight for commit loss
-        self.gamma0 = gamma0  # loss weight for entropy penalty
-        self.gamma = gamma  # loss weight for entropy penalty
-        self.zeta = zeta  # loss weight for entire entropy penalty
+        self.beta = beta  # 提交损失的权重
+        self.gamma0 = gamma0  # 熵惩罚的权重
+        self.gamma = gamma  # 熵惩罚的权重
+        self.zeta = zeta  # 整体熵惩罚的权重
         self.input_format = input_format
         assert self.embed_dim % group_size == 0, "embed_dim must be divisible by group_size"
         self.num_groups = self.embed_dim // group_size
@@ -71,13 +120,13 @@ class BinarySphericalQuantizer(nn.Module):
         self.num_dimensions = 2 ** embed_dim
         self.bits_per_index = embed_dim
 
-        # we only need to keep the codebook portion up to the group size
-        # because we approximate the H loss with this subcode
+        # 我们只需要保留到组大小的码本部分
+        # 因为我们用这个子码来近似H损失
         group_codes = torch.arange(2 ** self.group_size)
         group_codebook = self.indexes_to_codes(group_codes).float()[:, -group_size:]
         self.register_buffer('group_codebook', group_codebook, persistent=False)
 
-        self.soft_entropy = soft_entropy  # soft_entropy: Sec 3.2 of https://arxiv.org/pdf/1911.05894.pdf
+        self.soft_entropy = soft_entropy  # 软熵: 参考 https://arxiv.org/pdf/1911.05894.pdf 第3.2节
 
     def quantize(self, z):
         assert z.shape[-1] == self.embed_dim, f"Expected {self.embed_dim} dimensions, got {z.shape[-1]}"
@@ -88,7 +137,7 @@ class BinarySphericalQuantizer(nn.Module):
         return z + (zhat - z).detach()
 
     def forward(self, z):
-        # if self.input_format == 'bchw':
+        # 如果输入格式是'bchw':
         #     z = rearrange(z, 'b c h w -> b h w c')
         zq = self.quantize(z)
 
@@ -112,10 +161,10 @@ class BinarySphericalQuantizer(nn.Module):
 
         zq = zq * q_scale
 
-        # commit loss
+        # 提交损失
         commit_loss = self.beta * torch.mean(((zq.detach() - z) ** 2).sum(dim=-1))
 
-        # if self.input_format == 'bchw':
+        # 如果输入格式是'bchw':
         #     zq = rearrange(zq, 'b h w c -> b c h w')
 
         return (
@@ -126,12 +175,12 @@ class BinarySphericalQuantizer(nn.Module):
         )
 
     def soft_entropy_loss(self, z):
-        # if we divide the code in subgroups of size group_size, the codebook will be of size 2 ** group_size
-        # the sub-code is the last group_size bits of the full code
+        # 如果我们将代码分成大小为group_size的子组，码本的大小将是2 ** group_size
+        # 子码是完整代码的最后group_size位
         group_code_book = self.group_codebook / (self.embed_dim ** 0.5 if self.l2_norm else 1)
         divided_z = rearrange(z, '... (g c) -> ... g c', c=self.group_size)
 
-        # we calculate the distance between the divided_z and the codebook for each subgroup
+        # 我们计算每个子组的divided_z和码本之间的距离
         distance = - 2 * torch.einsum('... g c, d c ->... g d', divided_z, group_code_book)
         prob = (-distance * self.inv_temperature).softmax(dim=-1)
         if self.persample_entropy_compute == 'analytical':
@@ -144,11 +193,11 @@ class BinarySphericalQuantizer(nn.Module):
         else:
             per_sample_entropy = self.get_entropy(prob, dim=-1, normalize=False).sum(dim=-1).mean()
 
-        # macro average of the probability of each subgroup
+        # 每个子组概率的宏观平均值
         avg_prob = reduce(prob, '... g d ->g d', 'mean')
         codebook_entropy = self.get_entropy(avg_prob, dim=-1, normalize=False)
 
-        # the approximation of the entropy is the sum of the entropy of each subgroup
+        # 熵的近似值是每个子组熵的总和
         return per_sample_entropy, codebook_entropy.sum(), avg_prob
 
     def get_hard_per_sample_entropy(self, zb_by_sample):
@@ -159,7 +208,7 @@ class BinarySphericalQuantizer(nn.Module):
 
     def codes_to_indexes(self, zhat):
         """Converts a `code` to an index in the codebook.
-        Args:
+        参数:
             zhat: A tensor of shape (B, ..., C) containing the codes. must be in {-1, 1}
         """
         assert zhat.shape[-1] == self.embed_dim, f"Expected {self.embed_dim} dimensions, got {zhat.shape[-1]}"
@@ -167,7 +216,7 @@ class BinarySphericalQuantizer(nn.Module):
 
     def codes_to_group_indexes(self, zhat):
         """Converts a `code` to a list of indexes (in groups) in the codebook.
-        Args:
+        参数:
             zhat: A tensor of shape (B, ..., C) containing the codes. must be in {-1, 1}
         """
         zhat_in_group = rearrange(zhat, 'b ... (g c) -> b ... g c', c=self.group_size)
@@ -220,6 +269,13 @@ class BinarySphericalQuantizer(nn.Module):
 
 
 class BSQuantizer(nn.Module):
+    """
+    BSQuantizer类（二进制球面量化器的封装）
+    
+    功能：封装BinarySphericalQuantizer，提供对s1和s2比特的专门支持
+    特点：支持半量化模式，可分别处理s1和s2部分的量化
+    应用：主要用于Kronos模型的tokenizer部分
+    """
 
     def __init__(self, s1_bits, s2_bits, beta, gamma0, gamma, zeta, group_size):
         super().__init__()
@@ -252,6 +308,13 @@ class BSQuantizer(nn.Module):
 
 
 class RMSNorm(torch.nn.Module):
+    """
+    RMSNorm类（均方根归一化）
+    
+    功能：实现基于均方根的归一化操作，替代传统的LayerNorm
+    特点：计算效率更高，稳定性更好，常用于Transformer架构
+    优势：相比LayerNorm，减少了计算量并保持了相似的性能
+    """
     def __init__(self, dim: int, eps: float = 1e-5):
         super().__init__()
         self.eps = eps
@@ -266,6 +329,13 @@ class RMSNorm(torch.nn.Module):
 
 
 class FeedForward(nn.Module):
+    """
+    前馈神经网络类
+    
+    功能：实现Transformer中的前馈网络层，包含两个线性变换和激活函数
+    特点：使用SwiGLU激活函数，支持dropout正则化
+    结构：w1 → SwiGLU → w3 → w2 → Dropout
+    """
     def __init__(self, d_model, ff_dim, ffn_dropout_p=0.0):
         super().__init__()
 
@@ -279,6 +349,13 @@ class FeedForward(nn.Module):
 
 
 class RotaryPositionalEmbedding(nn.Module):
+    """
+    旋转位置编码类（RoPE）
+    
+    功能：实现旋转位置编码，将位置信息编码到注意力机制的查询和键中
+    特点：相对位置编码，支持任意长度的序列，具有良好的外推性
+    优势：相比绝对位置编码，能更好地处理长序列和位置关系
+    """
     def __init__(self, dim):
         super().__init__()
         inv_freq = 1.0 / (10000 ** (torch.arange(0, dim, 2).float() / dim))
@@ -337,7 +414,14 @@ def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.
 
 
 class MultiHeadAttentionWithRoPE(nn.Module):
-    def __init__(self, d_model, n_heads, attn_dropout_p=0.0, resid_dropout_p=0.0):
+    """
+    多头注意力机制类（带旋转位置编码）
+    
+    功能：实现带旋转位置编码的多头自注意力机制
+    特点：集成RoPE位置编码，支持多头注意力计算
+    应用：用于序列建模中的自注意力计算，增强位置感知能力
+    """
+    def __init__(self, d_model, n_heads, attn_dropout_p=0.0, rope_base=10000):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -349,7 +433,7 @@ class MultiHeadAttentionWithRoPE(nn.Module):
         self.out_proj = nn.Linear(d_model, d_model)
         self.rotary = RotaryPositionalEmbedding(self.head_dim)
         self.attn_dropout_p = attn_dropout_p
-        self.resid_dropout = nn.Dropout(resid_dropout_p)
+        self.resid_dropout = nn.Dropout(attn_dropout_p)
 
     def forward(self, x, key_padding_mask=None):
         batch_size, seq_len, _ = x.shape
@@ -379,7 +463,14 @@ class MultiHeadAttentionWithRoPE(nn.Module):
 
 
 class MultiHeadCrossAttentionWithRoPE(nn.Module):
-    def __init__(self, d_model, n_heads, attn_dropout_p=0.0, resid_dropout=0.0):
+    """
+    多头交叉注意力机制类（带旋转位置编码）
+    
+    功能：实现带旋转位置编码的多头交叉注意力机制
+    特点：集成RoPE位置编码，支持查询-键-值来自不同序列的注意力计算
+    应用：用于编码器-解码器架构中的交叉注意力计算
+    """
+    def __init__(self, d_model, n_heads, attn_dropout_p=0.0, rope_base=10000):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -391,7 +482,7 @@ class MultiHeadCrossAttentionWithRoPE(nn.Module):
         self.out_proj = nn.Linear(d_model, d_model)
         self.rotary = RotaryPositionalEmbedding(self.head_dim)
         self.attn_dropout_p = attn_dropout_p
-        self.resid_dropout = nn.Dropout(resid_dropout)
+        self.resid_dropout = nn.Dropout(attn_dropout_p)
 
     def forward(self, query, key, value, key_padding_mask=None):
         batch_size, q_len, _ = query.shape
@@ -424,6 +515,13 @@ class MultiHeadCrossAttentionWithRoPE(nn.Module):
 
 
 class HierarchicalEmbedding(nn.Module):
+    """
+    层次化嵌入类
+    
+    功能：实现多层次的嵌入表示，支持不同时间尺度的特征提取
+    特点：包含多个嵌入层，每个层级对应不同的时间粒度
+    应用：用于时间序列建模中的多尺度特征表示
+    """
     def __init__(self, s1_bits, s2_bits, d_model=256):
         super().__init__()
         self.s1_bits = s1_bits
@@ -455,9 +553,16 @@ class HierarchicalEmbedding(nn.Module):
 
 
 class DependencyAwareLayer(nn.Module):
-    def __init__(self, d_model, n_heads=4, attn_dropout_p=0.0, resid_dropout=0.0):
+    """
+    依赖感知层类
+    
+    功能：实现依赖感知的注意力机制，考虑序列元素间的依赖关系
+    特点：结合自注意力和交叉注意力，增强序列建模能力
+    应用：用于复杂时间序列中的依赖关系建模
+    """
+    def __init__(self, d_model, n_heads=4, attn_dropout_p=0.0, resid_dropout_p=0.0):
         super().__init__()
-        self.cross_attn = MultiHeadCrossAttentionWithRoPE(d_model, n_heads, attn_dropout_p, resid_dropout)
+        self.cross_attn = MultiHeadCrossAttentionWithRoPE(d_model, n_heads, attn_dropout_p, attn_dropout_p)
         self.norm = RMSNorm(d_model)
 
     def forward(self, hidden_states, sibling_embed, key_padding_mask=None):
@@ -474,6 +579,13 @@ class DependencyAwareLayer(nn.Module):
 
 
 class TransformerBlock(nn.Module):
+    """
+    Transformer块类
+    
+    功能：实现标准的Transformer编码器块，包含多头注意力和前馈网络
+    特点：使用RMSNorm归一化，支持残差连接和dropout正则化
+    结构：RMSNorm → MultiHeadAttention → RMSNorm → FeedForward
+    """
     def __init__(self, d_model, n_heads, ff_dim=1024, ffn_dropout_p=0.0, attn_dropout_p=0.0, resid_dropout_p=0.0):
         super().__init__()
         self.norm1 = RMSNorm(d_model)
@@ -495,6 +607,13 @@ class TransformerBlock(nn.Module):
 
 
 class DualHead(nn.Module):
+    """
+    双头输出类
+    
+    功能：实现双头输出机制，支持同时输出多个预测目标
+    特点：包含两个独立的输出头，每个头对应不同的预测任务
+    应用：用于多任务学习或需要同时预测多个目标值的场景
+    """
     def __init__(self, s1_bits, s2_bits, d_model):
         super().__init__()
         self.vocab_s1 = 2 ** s1_bits
@@ -525,6 +644,13 @@ class DualHead(nn.Module):
 
 
 class FixedEmbedding(nn.Module):
+    """
+    固定嵌入类
+    
+    功能：实现固定的嵌入层，不支持梯度更新
+    特点：嵌入权重固定不变，适用于预训练嵌入或固定编码
+    应用：用于需要固定嵌入表示的场景，如位置编码或类别编码
+    """
     def __init__(self, c_in, d_model):
         super(FixedEmbedding, self).__init__()
 
@@ -545,6 +671,13 @@ class FixedEmbedding(nn.Module):
 
 
 class TemporalEmbedding(nn.Module):
+    """
+    时间嵌入类
+    
+    功能：实现时间特征的嵌入表示，支持多种时间粒度的编码
+    特点：包含月、周、日、时、分等多种时间尺度的嵌入
+    应用：用于时间序列建模中的时间特征编码和表示学习
+    """
     def __init__(self, d_model, learn_pe):
         super(TemporalEmbedding, self).__init__()
 

@@ -16,8 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import logging
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
+# 获取日志记录器
 logger = logging.getLogger(__name__)
 
 

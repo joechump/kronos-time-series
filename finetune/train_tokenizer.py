@@ -31,15 +31,15 @@ from utils.training_utils import (
 
 def create_dataloaders(config: dict, rank: int, world_size: int):
     """
-    Creates and returns distributed dataloaders for training and validation.
+    创建并返回用于训练和验证的分布式数据加载器。
 
-    Args:
-        config (dict): A dictionary of configuration parameters.
-        rank (int): The global rank of the current process.
-        world_size (int): The total number of processes.
+    参数:
+        config (dict): 配置参数字典。
+        rank (int): 当前进程的全局排名。
+        world_size (int): 进程总数。
 
-    Returns:
-        tuple: A tuple containing (train_loader, val_loader, train_dataset, valid_dataset).
+    返回:
+        tuple: 包含(train_loader, val_loader, train_dataset, valid_dataset)的元组。
     """
     print(f"[Rank {rank}] Creating distributed dataloaders...")
     train_dataset = QlibDataset('train')
@@ -75,7 +75,7 @@ def train_model(model, device, config, save_dir, logger, rank, world_size):
     """
     The main training and validation loop for the tokenizer.
 
-    Args:
+    参数:
         model (DDP): The DDP-wrapped model to train.
         device (torch.device): The device for the current process.
         config (dict): Configuration dictionary.
@@ -84,7 +84,7 @@ def train_model(model, device, config, save_dir, logger, rank, world_size):
         rank (int): Global rank of the process.
         world_size (int): Total number of processes.
 
-    Returns:
+    返回:
         tuple: A tuple containing the trained model and a dictionary of results.
     """
     start_time = time.time()

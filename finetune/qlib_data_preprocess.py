@@ -13,7 +13,7 @@ from config import Config
 
 class QlibDataPreprocessor:
     """
-    A class to handle the loading, processing, and splitting of Qlib financial data.
+    用于处理Qlib金融数据的加载、处理和分割的类。
     """
 
     def __init__(self):

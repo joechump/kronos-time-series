@@ -217,10 +217,28 @@ class AutoModelLoader:
     
     def get_system_report(self) -> Dict:
         """获取系统资源报告"""
+        # 确保模型配置信息中的中文字符正确编码
+        available_models = {}
+        for key, config in self.model_configs.items():
+            # 创建配置副本并确保描述信息正确编码
+            encoded_config = config.copy()
+            if 'description' in encoded_config:
+                try:
+                    # 确保描述信息是正确编码的字符串
+                    description = encoded_config['description']
+                    if isinstance(description, str):
+                        # 尝试编码和解码以确保正确性
+                        encoded_description = description.encode('utf-8').decode('utf-8')
+                        encoded_config['description'] = encoded_description
+                except UnicodeError:
+                    # 如果编码失败，使用原始值
+                    pass
+            available_models[key] = encoded_config
+        
         return {
             'system_info': self.system_info,
             'system_score': self._calculate_system_score(self.system_info),
-            'available_models': self.model_configs,
+            'available_models': available_models,
             'recommended_model': self.select_optimal_model()[0],
             'recommended_device': self.select_optimal_device()
         }

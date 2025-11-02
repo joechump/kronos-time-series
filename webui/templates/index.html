@@ -3,10 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kronos 金融预测分析平台</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Kronos 金融预测分析平台 v2.0.1</title>
     <!-- 使用内联JavaScript库解决网络连接问题 -->
     <script>
         // Clear browser cache for this session
+        const CURRENT_VERSION = '2.0.1';
+        const cachedVersion = localStorage.getItem('kronos_version');
+        
+        if (cachedVersion !== CURRENT_VERSION) {
+            console.log('🔄 检测到版本更新，清除缓存...');
+            localStorage.setItem('kronos_version', CURRENT_VERSION);
+            // 强制刷新页面
+            if (cachedVersion) {
+                window.location.reload(true);
+            }
+        }
+        
         if (window.performance && window.performance.navigation.type === window.performance.navigation.TYPE_RELOAD) {
             console.log('🔄 强制刷新页面，清除缓存');
         }
@@ -1016,6 +1031,9 @@
             <p>基于AI的金融K线数据预测分析系统</p>
         </div>
 
+        <!-- Status Message Display -->
+        <div id="model-status" class="status" style="display: none; padding: 15px; margin-bottom: 20px; border-radius: 8px; text-align: center; font-weight: 500;"></div>
+
         <div class="main-content">
             <div class="control-panel">
                 <h2>🎯 控制面板</h2>
@@ -1039,6 +1057,7 @@
                         <input type="text" id="stock-code-input" class="form-control" placeholder="输入A股股票代码（如：000001）">
                         <div class="input-group-append">
                             <button id="load-data-btn" class="btn btn-primary" type="button">📥 加载数据</button>
+                            <button id="download-stock-data-btn" class="btn btn-outline-secondary" type="button" style="display: none; margin-left: 5px;">💾 下载数据</button>
                         </div>
                     </div>
                     <small class="form-text">输入A股股票代码后点击加载数据，将自动下载近1年交易数据</small>
@@ -1068,8 +1087,8 @@
                     <h3>📅 交易日历集成</h3>
                     <div class="calendar-controls">
                         <div class="form-group">
-                            <label for="trading-day-mode">交易日模式：</label>
-                            <select id="trading-day-mode" class="form-control">
+                            <label for="trading-mode">交易日模式：</label>
+                            <select id="trading-mode" class="form-control">
                                 <option value="auto">自动识别</option>
                                 <option value="trading_only">仅交易日</option>
                                 <option value="all_days">所有日期</option>
@@ -1122,35 +1141,35 @@
                 <!-- Prediction Parameters -->
                 <div class="form-group">
                     <label for="lookback">回看窗口大小：</label>
-                    <input type="number" id="lookback" value="400" readonly>
-                    <small class="form-text">固定为400个数据点</small>
+                    <input type="number" id="lookback" value="100" readonly>
+                    <small class="form-text">固定为100个数据点（优化性能）</small>
                 </div>
 
                 <div class="form-group">
                     <label for="pred-len">预测长度：</label>
-                    <input type="number" id="pred-len" value="120" readonly>
-                    <small class="form-text">固定为120个数据点</small>
+                    <input type="number" id="pred-len" value="30" readonly>
+                    <small class="form-text">固定为30个数据点（优化性能）</small>
                 </div>
 
                 <!-- Prediction Quality Parameters -->
                 <div class="form-group">
                     <label for="temperature">预测温度 (T)：</label>
-                    <input type="range" id="temperature" value="1.0" min="0.1" max="2.0" step="0.1">
-                    <span id="temperature-value">1.0</span>
-                    <small class="form-text">控制预测随机性，较高值使预测更多样化，较低值使预测更保守</small>
+                    <input type="range" id="temperature" value="1.3" min="0.1" max="2.0" step="0.1">
+                    <span id="temperature-value">1.3</span>
+                    <small class="form-text">控制预测随机性，较高值使预测更多样化，较低值使预测更保守（推荐值：1.2-1.5）</small>
                 </div>
 
                 <div class="form-group">
                     <label for="top-p">核心采样参数 (top_p)：</label>
-                    <input type="range" id="top-p" value="0.9" min="0.1" max="1.0" step="0.1">
-                    <span id="top-p-value">0.9</span>
-                    <small class="form-text">控制预测多样性，较高值考虑更广泛的概率分布</small>
+                    <input type="range" id="top-p" value="0.98" min="0.1" max="1.0" step="0.1">
+                    <span id="top-p-value">0.98</span>
+                    <small class="form-text">控制预测多样性，较高值考虑更广泛的概率分布（推荐值：0.95-1.0）</small>
                 </div>
 
                 <div class="form-group">
                     <label for="sample-count">样本数量：</label>
-                    <input type="number" id="sample-count" value="1" min="1" max="5" step="1">
-                    <small class="form-text">生成多个预测样本以提高质量（推荐1-3个）</small>
+                    <input type="number" id="sample-count" value="2" min="1" max="5" step="1">
+                    <small class="form-text">生成多个预测样本以提高质量（推荐值：2-3个）</small>
                 </div>
 
                 <button id="predict-btn" class="btn btn-success" disabled>
@@ -1161,6 +1180,12 @@
                 <div id="loading" class="loading">
                     <div class="spinner"></div>
                     <p>处理中，请稍候...</p>
+                    <!-- Progress Bar -->
+                    <div class="progress-container" style="margin-top: 10px; width: 100%;">
+                        <div id="progress-bar" class="progress-bar" style="width: 0%; height: 20px; background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%); border-radius: 10px; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;">
+                            0%
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1235,7 +1260,11 @@
 
         // Initialize application
         async function initializeApp() {
-            console.log('🚀 Initializing Kronos Web UI...');
+            console.log('==================================================');
+            console.log('🚀 Kronos Web UI v2.0.1');
+            console.log('📅 Bug Fix: Null pointer errors resolved');
+            console.log('==================================================');
+            console.log('🔧 Initializing application...');
             
             // Set up event listeners
             setupEventListeners();
@@ -1306,8 +1335,8 @@
 
         // Load model
         async function loadModel() {
-            const modelKey = document.getElementById('model-select').value;
-            const device = document.getElementById('device-select').value;
+            const modelKey = getParamValue('model-select', '');
+            const device = getParamValue('device-select', 'cpu');
             
             if (!modelKey) {
                 showStatus('error', '请选择要加载的模型');
@@ -1378,6 +1407,7 @@
                 if (!status) {
                     updateModelStatusDisplay('error', '❌ 模型状态检查失败', '无法获取有效的模型状态信息');
                     console.error('❌ Invalid model status response:', status);
+                    modelLoaded = false; // 确保状态一致
                     return;
                 }
                 
@@ -1386,18 +1416,46 @@
                     const modelName = status.current_model?.name || '未知模型';
                     updateModelStatusDisplay('success', '✅ 模型加载成功', `模型 ${modelName} 已成功加载并准备就绪`);
                     document.getElementById('predict-btn').disabled = false;
+                    modelLoaded = true; // 关键修复：设置全局模型加载状态
                     console.log('✅ Model loaded successfully:', status.current_model);
                 } else if (status.loaded && !status.healthy) {
                     const errorMessage = status.message || '未知错误';
                     updateModelStatusDisplay('error', '❌ 模型加载异常', `模型加载完成但存在异常: ${errorMessage}`);
                     console.error('❌ Model loaded but unhealthy:', status.message);
+                    modelLoaded = false; // 模型异常时禁用预测
+                } else if (status.direct_model_loaded) {
+                    // 关键修复：处理直接加载的模型状态
+                    // 从direct_model_info中获取模型名称，如果不存在则尝试从模型键名获取
+                    let modelName = status.direct_model_info?.name || '未知模型';
+                    // 如果名称是"Unknown"，尝试从模型键名推断
+                    if (modelName === 'Unknown') {
+                        // 从direct_model_info中获取模型键名
+                        const modelPath = status.direct_model_info?.path || '';
+                        if (modelPath.includes('kronos-small')) {
+                            modelName = 'Kronos-small';
+                        } else if (modelPath.includes('kronos-base')) {
+                            modelName = 'Kronos-base';
+                        } else if (modelPath.includes('kronos-mini')) {
+                            modelName = 'Kronos-mini';
+                        } else {
+                            modelName = '未知模型';
+                        }
+                    }
+                    updateModelStatusDisplay('success', '✅ 模型加载成功', `模型 ${modelName} 已成功加载并准备就绪`);
+                    document.getElementById('predict-btn').disabled = false;
+                    modelLoaded = true; // 关键修复：设置全局模型加载状态
+                    console.log('✅ Direct model loaded successfully:', status.direct_model_info);
                 } else {
                     updateModelStatusDisplay('warning', '⚠️ 模型未加载', '系统正在自动加载模型，请稍候...');
+                    document.getElementById('predict-btn').disabled = true;
+                    modelLoaded = false; // 模型未加载时禁用预测
                     console.log('🔄 Model not loaded yet, waiting for auto-load...');
                 }
             } catch (error) {
                 console.error('❌ Failed to get model status:', error);
                 updateModelStatusDisplay('error', '❌ 模型状态检查失败', `无法获取模型状态: ${error.message}`);
+                document.getElementById('predict-btn').disabled = true;
+                modelLoaded = false; // 检查失败时禁用预测
             }
         }
         
@@ -1625,9 +1683,9 @@
             
             if (windowStart) windowStart.textContent = `开始时间: ${startDate.toLocaleDateString()}`;
             if (windowEnd) windowEnd.textContent = `结束时间: ${endDate.toLocaleDateString()}`;
-            if (windowSize) windowSize.textContent = `窗口大小: 400 + 120 = 520 个数据点 (固定)`;
-            if (lookbackInput) lookbackInput.value = 400;
-            if (predLenInput) predLenInput.value = 120;
+            if (windowSize) windowSize.textContent = `窗口大小: 100 + 30 = 130 个数据点 (固定)`;
+            if (lookbackInput) lookbackInput.value = 100;
+            if (predLenInput) predLenInput.value = 30;
         }
 
         // Update slider based on input fields
@@ -1684,15 +1742,31 @@
             updateSliderFromInputs();
         }
 
-        // Start prediction
+        // 安全获取参数值，避免null值错误
+        const getParamValue = (elementId, defaultValue) => {
+            const element = document.getElementById(elementId);
+            if (!element) {
+                console.warn(`元素 ${elementId} 未找到，使用默认值:`, defaultValue);
+                return defaultValue;
+            }
+            // 安全地获取value，避免null.value错误
+            const value = element.value;
+            return (value !== null && value !== undefined && value !== '') ? value : defaultValue;
+        };
+        
+        // Start prediction with progress tracking
         async function startPrediction() {
+            
             console.log('🔍 开始预测状态检查...');
-            console.log('📊 当前数据文件:', currentDataFile);
+            
+            // 检查股票代码是否已设置
+            const stockCode = getParamValue('stock-code-input', '').trim();
+            console.log('📊 当前股票代码:', stockCode);
             console.log('🤖 模型加载状态:', modelLoaded);
             
-            if (!currentDataFile) {
-                console.error('❌ 数据文件未设置');
-                showStatus('error', '请先加载股票数据');
+            if (!stockCode) {
+                console.error('❌ 股票代码未设置');
+                showStatus('error', '请先输入股票代码并加载数据');
                 return;
             }
             
@@ -1702,14 +1776,18 @@
                 return;
             }
             
+            // 进度轮询变量
+            let progressInterval = null;
+            
             try {
-                showLoading(true);
-                document.getElementById('predict-btn').disabled = true;
+                showLoading(true, '开始预测...', 60000); // 60秒超时
+                const predictBtn = document.getElementById('predict-btn');
+                if (predictBtn) predictBtn.disabled = true;
                 
                 console.log('✅ 状态检查通过，开始预测...');
                 
-                const lookback = parseInt(document.getElementById('lookback').value);
-                const predLen = parseInt(document.getElementById('pred-len').value);
+                const lookback = parseInt(getParamValue('lookback', '100'));
+                const predLen = parseInt(getParamValue('pred-len', '30'));
                 
                 // Get selected time range from time window slider
                 const startHandle = document.getElementById('start-handle');
@@ -1717,7 +1795,8 @@
                     showStatus('error', '时间窗口滑块未找到');
                     return;
                 }
-                const startPercentage = parseFloat(startHandle.style.left) / 100;
+                const startLeft = startHandle.style.left || '0%';
+                const startPercentage = parseFloat(startLeft) / 100;
                 
                 if (!sliderData) {
                     showStatus('error', '时间窗口滑块未初始化');
@@ -1730,15 +1809,16 @@
                 const startDate = new Date(startTime);
                 
                 // Check if trading calendar mode is enabled
-                const tradingMode = document.getElementById('trading-mode').value;
+                const tradingMode = getParamValue('trading-mode', 'calendar');
+                
                 let predictionParams = {
-                    file_path: currentDataFile,
+                    file_path: `stock_${stockCode}_live`, // 使用akshare实时数据格式
                     lookback: lookback,
                     pred_len: predLen,
                     start_date: startDate.toISOString().slice(0, 16), // Format as YYYY-MM-DDTHH:MM
-                    temperature: parseFloat(document.getElementById('temperature').value),
-                    top_p: parseFloat(document.getElementById('top-p').value),
-                    sample_count: parseInt(document.getElementById('sample-count').value)
+                    temperature: parseFloat(getParamValue('temperature', '1.3')),
+                    top_p: parseFloat(getParamValue('top-p', '0.98')),
+                    sample_count: parseInt(getParamValue('sample-count', '2'))
                 };
                 
                 // Add trading calendar parameters if enabled
@@ -1746,13 +1826,16 @@
                     predictionParams.trading_mode = tradingMode;
                     
                     // Use trading calendar start date if specified
-                    const calendarStartDate = document.getElementById('prediction-start-date').value;
+                    const calendarStartDate = getParamValue('prediction-start-date', null);
                     if (calendarStartDate) {
                         predictionParams.start_date = calendarStartDate + 'T00:00';
                     }
                 }
                 
                 console.log('🚀 开始预测，参数:', predictionParams);
+                
+                // 开始进度轮询
+                progressInterval = setInterval(updateProgress, 500); // 每500ms轮询一次
                 
                 try {
                     const response = await axios.post('/api/predict', predictionParams);
@@ -1787,14 +1870,55 @@
                     
                     showStatus('error', errorMessage);
                 } finally {
+                    // 清除进度轮询
+                    if (progressInterval) {
+                        clearInterval(progressInterval);
+                        progressInterval = null;
+                    }
                     showLoading(false);
-                    document.getElementById('predict-btn').disabled = false;
+                    const predictBtn = document.getElementById('predict-btn');
+                    if (predictBtn) predictBtn.disabled = false;
                 }
             } catch (error) {
                 console.error('❌ 预测过程发生错误:', error);
                 showStatus('error', '预测过程发生错误: ' + error.message);
+                
+                // 清除进度轮询
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
                 showLoading(false);
-                document.getElementById('predict-btn').disabled = false;
+                const predictBtn = document.getElementById('predict-btn');
+                if (predictBtn) predictBtn.disabled = false;
+            }
+        }
+        
+        // Update progress display
+        async function updateProgress() {
+            try {
+                const response = await axios.get('/api/prediction/progress');
+                const progress = response.data;
+                
+                if (progress.is_running) {
+                    // 更新加载状态显示
+                    const loadingElement = document.getElementById('loading');
+                    if (loadingElement) {
+                        const loadingText = loadingElement.querySelector('p');
+                        if (loadingText) {
+                            loadingText.textContent = `${progress.message} (${progress.current}%)`;
+                        }
+                    }
+                    
+                    // 更新进度条（如果存在）
+                    const progressBar = document.getElementById('progress-bar');
+                    if (progressBar) {
+                        progressBar.style.width = `${progress.current}%`;
+                        progressBar.textContent = `${progress.current}%`;
+                    }
+                }
+            } catch (error) {
+                console.log('进度轮询失败:', error);
             }
         }
         
@@ -1939,8 +2063,8 @@
 
         // Trading calendar functions
         function loadTradingCalendar() {
-            const mode = document.getElementById('trading-mode').value;
-            const startDate = document.getElementById('prediction-start-date').value;
+            const mode = getParamValue('trading-mode', 'calendar');
+            const startDate = getParamValue('prediction-start-date', '');
             
             if (!startDate) {
                 showStatus('error', '请选择预测起始日期');
@@ -2040,7 +2164,7 @@
         // Stock data loading functions
         
         function loadStockDataDirectly() {
-            const code = document.getElementById('stock-code-input').value.trim();
+            const code = getParamValue('stock-code-input', '').trim();
             if (!code) {
                 showStatus('warning', '请输入股票代码');
                 return;
@@ -2175,9 +2299,21 @@
                         currentDataFile = `stock_${code}_live`;
                         console.log('📊 设置当前数据文件:', currentDataFile);
                         
-                        // Enable prediction
+                        // Enable prediction button only if model is loaded
                         const predictBtn = document.getElementById('predict-btn');
-                        if (predictBtn) predictBtn.disabled = false;
+                        if (predictBtn) {
+                            // Check model status before enabling
+                            checkModelStatus().then(() => {
+                                // Double check model status after async check
+                                if (modelLoaded) {
+                                    predictBtn.disabled = false;
+                                    console.log('✅ 预测按钮已启用');
+                                } else {
+                                    predictBtn.disabled = true;
+                                    console.log('⚠️ 预测按钮保持禁用状态：模型未加载');
+                                }
+                            });
+                        }
                         
                         // Show download button
                         const downloadBtn = document.getElementById('download-stock-data-btn');
@@ -2271,8 +2407,6 @@
                 loadCalendarBtn.addEventListener('click', loadTradingCalendar);
             }
             
-
-            
             // Prediction button
             document.getElementById('predict-btn').addEventListener('click', startPrediction);
             
@@ -2308,26 +2442,31 @@
                             console.log('模型信息:', data.current_model);
                             // Enable prediction button when model is loaded
                             if (predictBtn) predictBtn.disabled = false;
+                            modelLoaded = true; // 关键修复：设置全局模型加载状态
                         } else if (data.direct_model_loaded) {
                             // 直接加载的模型
                             showStatus('success', '模型已自动加载完成');
                             console.log('自动加载的模型信息:', data.direct_model_info);
                             // Enable prediction button when model is automatically loaded
                             if (predictBtn) predictBtn.disabled = false;
+                            modelLoaded = true; // 关键修复：设置全局模型加载状态
                         } else if (data.available && !data.loaded) {
                             // 模型可用但未加载
                             showStatus('warning', '模型未加载，请下载模型或检查模型文件');
                             // Disable prediction button when no model is available
                             if (predictBtn) predictBtn.disabled = true;
+                            modelLoaded = false; // 关键修复：设置全局模型加载状态
                         } else if (!data.available) {
                             // 模型不可用
                             showStatus('error', '模型不可用: ' + (data.message || '未知错误'));
                             // Disable prediction button on error
                             if (predictBtn) predictBtn.disabled = true;
+                            modelLoaded = false; // 关键修复：设置全局模型加载状态
                         } else {
                             // 其他状态
                             showStatus('warning', '模型状态未知: ' + (data.message || '请检查模型配置'));
                             if (predictBtn) predictBtn.disabled = true;
+                            modelLoaded = false; // 关键修复：设置全局模型加载状态
                         }
                         resolve(data);
                     })
@@ -2337,6 +2476,7 @@
                         // Disable prediction button on error
                         const predictBtn = document.getElementById('predict-btn');
                         if (predictBtn) predictBtn.disabled = true;
+                        modelLoaded = false; // 关键修复：设置全局模型加载状态
                         resolve({success: false, error: error.message});
                     });
             });
@@ -2346,7 +2486,8 @@
         function showStatus(type, message) {
             const statusDiv = document.getElementById('model-status');
             if (!statusDiv) {
-                console.warn('Status div not found');
+                // 如果状态元素不存在，直接输出到控制台
+                console.log(`[${type.toUpperCase()}] ${message}`);
                 return;
             }
             statusDiv.className = `status ${type}`;
@@ -2359,13 +2500,51 @@
             }, 5000);
         }
 
-        // Show/hide loading status
-        function showLoading(show) {
+        // Show/hide loading status with progress and timeout control
+        function showLoading(show, message = '处理中，请稍候...', timeoutMs = 30000) {
             const loadingDiv = document.getElementById('loading');
+            if (!loadingDiv) {
+                console.log('Loading div not found');
+                return;
+            }
+            const loadingText = loadingDiv.querySelector('p');
+            
             if (show) {
+                loadingText.textContent = message;
                 loadingDiv.classList.add('show');
+                
+                // Set timeout to prevent infinite loading
+                if (timeoutMs > 0) {
+                    window.loadingTimeout = setTimeout(() => {
+                        if (loadingDiv.classList.contains('show')) {
+                            showLoading(false);
+                            showStatus('error', '预测超时，请检查参数设置或重试');
+                            document.getElementById('predict-btn').disabled = false;
+                        }
+                    }, timeoutMs);
+                }
             } else {
                 loadingDiv.classList.remove('show');
+                // Clear any existing timeout
+                if (window.loadingTimeout) {
+                    clearTimeout(window.loadingTimeout);
+                    window.loadingTimeout = null;
+                }
+            }
+        }
+        
+        // Update loading progress
+        function updateLoadingProgress(progress, message = null) {
+            const loadingDiv = document.getElementById('loading');
+            if (!loadingDiv || !loadingDiv.classList.contains('show')) return;
+            
+            const loadingText = loadingDiv.querySelector('p');
+            const progressText = ` (${Math.round(progress)}%)`;
+            
+            if (message) {
+                loadingText.textContent = message + progressText;
+            } else {
+                loadingText.textContent = loadingText.textContent.replace(/\s*\(\d+%\)/, '') + progressText;
             }
         }
     </script>

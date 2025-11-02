@@ -12,28 +12,30 @@ from model.module import *
 
 class KronosTokenizer(nn.Module, PyTorchModelHubMixin):
     """
-    KronosTokenizer module for tokenizing input data using a hybrid quantization approach.
+    KronosTokenizer模块：使用混合量化方法对输入数据进行标记化
 
-    This tokenizer utilizes a combination of encoder and decoder Transformer blocks
-    along with the Binary Spherical Quantization (BSQuantizer) to compress and decompress input data.
+    该标记器利用编码器和解码器Transformer块的组合，
+    以及二进制球面量化（BSQuantizer）来压缩和解压缩输入数据。
+    主要用于将连续的时间序列数据转换为离散的token表示，
+    支持双向编码-解码架构和分层量化策略。
 
-    Args:
-           d_in (int): Input dimension.
-           d_model (int): Model dimension.
-           n_heads (int): Number of attention heads.
-           ff_dim (int): Feed-forward dimension.
-           n_enc_layers (int): Number of encoder layers.
-           n_dec_layers (int): Number of decoder layers.
-           ffn_dropout_p (float): Dropout probability for feed-forward networks.
-           attn_dropout_p (float): Dropout probability for attention mechanisms.
-           resid_dropout_p (float): Dropout probability for residual connections.
-           s1_bits (int): Number of bits for the pre token in BSQuantizer.
-           s2_bits (int): Number of bits for the post token in BSQuantizer.
-           beta (float): Beta parameter for BSQuantizer.
-           gamma0 (float): Gamma0 parameter for BSQuantizer.
-           gamma (float): Gamma parameter for BSQuantizer.
-           zeta (float): Zeta parameter for BSQuantizer.
-           group_size (int): Group size parameter for BSQuantizer.
+    参数:
+           d_in (int): 输入维度。
+           d_model (int): 模型维度。
+           n_heads (int): 注意力头数。
+           ff_dim (int): 前馈网络维度。
+           n_enc_layers (int): 编码器层数。
+           n_dec_layers (int): 解码器层数。
+           ffn_dropout_p (float): 前馈网络的dropout概率。
+           attn_dropout_p (float): 注意力机制的dropout概率。
+           resid_dropout_p (float): 残差连接的dropout概率。
+           s1_bits (int): BSQuantizer中pre token的比特数。
+           s2_bits (int): BSQuantizer中post token的比特数。
+           beta (float): BSQuantizer的beta参数。
+           gamma0 (float): BSQuantizer的gamma0参数。
+           gamma (float): BSQuantizer的gamma参数。
+           zeta (float): BSQuantizer的zeta参数。
+           group_size (int): BSQuantizer的组大小参数。
 
     """
 
@@ -52,39 +54,39 @@ class KronosTokenizer(nn.Module, PyTorchModelHubMixin):
 
         self.s1_bits = s1_bits
         self.s2_bits = s2_bits
-        self.codebook_dim = s1_bits + s2_bits # Total dimension of the codebook after quantization
+        self.codebook_dim = s1_bits + s2_bits # 量化后码本的总维度
         self.embed = nn.Linear(self.d_in, self.d_model)
         self.head = nn.Linear(self.d_model, self.d_in)
 
-        # Encoder Transformer Blocks
+        # 编码器Transformer块
         self.encoder = nn.ModuleList([
             TransformerBlock(self.d_model, self.n_heads, self.ff_dim, self.ffn_dropout_p, self.attn_dropout_p, self.resid_dropout_p)
             for _ in range(self.enc_layers - 1)
         ])
-        # Decoder Transformer Blocks
+        # 解码器Transformer块
         self.decoder = nn.ModuleList([
             TransformerBlock(self.d_model, self.n_heads, self.ff_dim, self.ffn_dropout_p, self.attn_dropout_p, self.resid_dropout_p)
             for _ in range(self.dec_layers - 1)
         ])
-        self.quant_embed = nn.Linear(in_features=self.d_model, out_features=self.codebook_dim) # Linear layer before quantization
-        self.post_quant_embed_pre = nn.Linear(in_features=self.s1_bits, out_features=self.d_model) # Linear layer after quantization (pre part - s1 bits)
-        self.post_quant_embed = nn.Linear(in_features=self.codebook_dim, out_features=self.d_model) # Linear layer after quantization (full codebook)
-        self.tokenizer = BSQuantizer(self.s1_bits, self.s2_bits, beta, gamma0, gamma, zeta, group_size) # BSQuantizer module
+        self.quant_embed = nn.Linear(in_features=self.d_model, out_features=self.codebook_dim) # 量化前的线性层
+        self.post_quant_embed_pre = nn.Linear(in_features=self.s1_bits, out_features=self.d_model) # 量化后的线性层（pre部分 - s1比特）
+        self.post_quant_embed = nn.Linear(in_features=self.codebook_dim, out_features=self.d_model) # 量化后的线性层（完整码本）
+        self.tokenizer = BSQuantizer(self.s1_bits, self.s2_bits, beta, gamma0, gamma, zeta, group_size) # BSQuantizer模块
 
     def forward(self, x):
         """
-        Forward pass of the KronosTokenizer.
+        KronosTokenizer的前向传播。
 
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, seq_len, d_in).
+        参数:
+            x (torch.Tensor): 输入张量，形状为 (batch_size, seq_len, d_in)。
 
-        Returns:
-            tuple: A tuple containing:
-                - tuple: (z_pre, z) - Reconstructed outputs from decoder with s1_bits and full codebook respectively,
-                         both of shape (batch_size, seq_len, d_in).
-                - torch.Tensor: bsq_loss - Loss from the BSQuantizer.
-                - torch.Tensor: quantized - Quantized representation from BSQuantizer.
-                - torch.Tensor: z_indices - Indices from the BSQuantizer.
+        返回:
+            tuple: 包含以下元素的元组:
+                - tuple: (z_pre, z) - 解码器使用s1_bits和完整码本的重构输出，
+                         形状均为 (batch_size, seq_len, d_in)。
+                - torch.Tensor: bsq_loss - BSQuantizer的损失。
+                - torch.Tensor: quantized - BSQuantizer的量化表示。
+                - torch.Tensor: z_indices - BSQuantizer的索引。
         """
         z = self.embed(x)
 
@@ -95,17 +97,17 @@ class KronosTokenizer(nn.Module, PyTorchModelHubMixin):
 
         bsq_loss, quantized, z_indices = self.tokenizer(z)
 
-        quantized_pre = quantized[:, :, :self.s1_bits] # Extract the first part of quantized representation (s1_bits)
+        quantized_pre = quantized[:, :, :self.s1_bits] # 提取量化表示的第一部分（s1比特）
         z_pre = self.post_quant_embed_pre(quantized_pre)
 
         z = self.post_quant_embed(quantized)
 
-        # Decoder layers (for pre part - s1 bits)
+        # 解码器层（用于pre部分 - s1比特）
         for layer in self.decoder:
             z_pre = layer(z_pre)
         z_pre = self.head(z_pre)
 
-        # Decoder layers (for full codebook)
+        # 解码器层（用于完整码本）
         for layer in self.decoder:
             z = layer(z)
         z = self.head(z)
@@ -114,41 +116,41 @@ class KronosTokenizer(nn.Module, PyTorchModelHubMixin):
 
     def indices_to_bits(self, x, half=False):
         """
-        Converts indices to bit representations and scales them.
+        将索引转换为比特表示并进行缩放。
 
-        Args:
-            x (torch.Tensor): Indices tensor.
-            half (bool, optional): Whether to process only half of the codebook dimension. Defaults to False.
+        参数:
+            x (torch.Tensor): 索引张量。
+            half (bool, 可选): 是否只处理码本维度的一半。默认为False。
 
-        Returns:
-            torch.Tensor: Bit representation tensor.
+        返回:
+            torch.Tensor: 比特表示张量。
         """
         if half:
-            x1 = x[0] # Assuming x is a tuple of indices if half is True
+            x1 = x[0] # 假设x是索引元组，如果half为True
             x2 = x[1]
-            mask = 2 ** torch.arange(self.codebook_dim//2, device=x1.device, dtype=torch.long) # Create a mask for bit extraction
-            x1 = (x1.unsqueeze(-1) & mask) != 0 # Extract bits for the first half
-            x2 = (x2.unsqueeze(-1) & mask) != 0 # Extract bits for the second half
-            x = torch.cat([x1, x2], dim=-1) # Concatenate the bit representations
+            mask = 2 ** torch.arange(self.codebook_dim//2, device=x1.device, dtype=torch.long) # 创建比特提取的掩码
+            x1 = (x1.unsqueeze(-1) & mask) != 0 # 提取第一半的比特
+            x2 = (x2.unsqueeze(-1) & mask) != 0 # 提取第二半的比特
+            x = torch.cat([x1, x2], dim=-1) # 连接比特表示
         else:
-            mask = 2 ** torch.arange(self.codebook_dim, device=x.device, dtype=torch.long) # Create a mask for bit extraction
-            x = (x.unsqueeze(-1) & mask) != 0 # Extract bits
+            mask = 2 ** torch.arange(self.codebook_dim, device=x.device, dtype=torch.long) # 创建比特提取的掩码
+            x = (x.unsqueeze(-1) & mask) != 0 # 提取比特
 
-        x = x.float() * 2 - 1 # Convert boolean to bipolar (-1, 1)
-        q_scale = 1. / (self.codebook_dim ** 0.5) # Scaling factor
+        x = x.float() * 2 - 1 # 将布尔值转换为双极值（-1, 1）
+        q_scale = 1. / (self.codebook_dim ** 0.5) # 缩放因子
         x = x * q_scale
         return x
 
     def encode(self, x, half=False):
         """
-        Encodes the input data into quantized indices.
+        将输入数据编码为量化索引。
 
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, seq_len, d_in).
-            half (bool, optional): Whether to use half quantization in BSQuantizer. Defaults to False.
+        参数:
+            x (torch.Tensor): 输入张量，形状为 (batch_size, seq_len, d_in)。
+            half (bool, 可选): 是否在BSQuantizer中使用半量化。默认为False。
 
-        Returns:
-            torch.Tensor: Quantized indices from BSQuantizer.
+        返回:
+            torch.Tensor: BSQuantizer的量化索引。
         """
         z = self.embed(x)
         for layer in self.encoder:
@@ -160,14 +162,14 @@ class KronosTokenizer(nn.Module, PyTorchModelHubMixin):
 
     def decode(self, x, half=False):
         """
-        Decodes quantized indices back to the input data space.
+        将量化索引解码回输入数据空间。
 
-        Args:
-            x (torch.Tensor): Quantized indices tensor.
-            half (bool, optional): Whether the indices were generated with half quantization. Defaults to False.
+        参数:
+            x (torch.Tensor): 量化索引张量。
+            half (bool, 可选): 索引是否使用半量化生成。默认为False。
 
-        Returns:
-            torch.Tensor: Reconstructed output tensor of shape (batch_size, seq_len, d_in).
+        返回:
+            torch.Tensor: 重构的输出张量，形状为 (batch_size, seq_len, d_in)。
         """
         quantized = self.indices_to_bits(x, half)
         z = self.post_quant_embed(quantized)
@@ -179,20 +181,24 @@ class KronosTokenizer(nn.Module, PyTorchModelHubMixin):
 
 class Kronos(nn.Module, PyTorchModelHubMixin):
     """
-    Kronos Model.
+    Kronos模型：基于Transformer架构的时间序列预测模型
 
-    Args:
-        s1_bits (int): Number of bits for pre tokens.
-        s2_bits (int): Number of bits for post tokens.
-        n_layers (int): Number of Transformer blocks.
-        d_model (int): Dimension of the model's embeddings and hidden states.
-        n_heads (int): Number of attention heads in the MultiheadAttention layers.
-        ff_dim (int): Dimension of the feedforward network in the Transformer blocks.
-        ffn_dropout_p (float): Dropout probability for the feedforward network.
-        attn_dropout_p (float): Dropout probability for the attention layers.
-        resid_dropout_p (float): Dropout probability for residual connections.
-        token_dropout_p (float): Dropout probability for token embeddings.
-        learn_te (bool): Whether to use learnable temporal embeddings.
+    该模型采用分层token表示和依赖感知机制，专门用于金融时间序列预测。
+    支持s1和s2 tokens的联合建模，通过依赖感知层实现条件预测。
+    集成了时间嵌入、Transformer编码器和双头输出架构。
+
+    参数:
+        s1_bits (int): pre tokens的比特数。
+        s2_bits (int): post tokens的比特数。
+        n_layers (int): Transformer块的数量。
+        d_model (int): 模型嵌入和隐藏状态的维度。
+        n_heads (int): MultiheadAttention层中的注意力头数。
+        ff_dim (int): Transformer块中前馈网络的维度。
+        ffn_dropout_p (float): 前馈网络的dropout概率。
+        attn_dropout_p (float): 注意力层的dropout概率。
+        resid_dropout_p (float): 残差连接的dropout概率。
+        token_dropout_p (float): token嵌入的dropout概率。
+        learn_te (bool): 是否使用可学习的时间嵌入。
     """
 
     def __init__(self, s1_bits, s2_bits, n_layers, d_model, n_heads, ff_dim, ffn_dropout_p, attn_dropout_p, resid_dropout_p, token_dropout_p, learn_te):
@@ -238,18 +244,18 @@ class Kronos(nn.Module, PyTorchModelHubMixin):
 
     def forward(self, s1_ids, s2_ids, stamp=None, padding_mask=None, use_teacher_forcing=False, s1_targets=None):
         """
-        Args:
-            s1_ids (torch.Tensor): Input tensor of s1 token IDs. Shape: [batch_size, seq_len]
-            s2_ids (torch.Tensor): Input tensor of s2 token IDs. Shape: [batch_size, seq_len]
-            stamp (torch.Tensor, optional): Temporal stamp tensor. Shape: [batch_size, seq_len]. Defaults to None.
-            padding_mask (torch.Tensor, optional): Mask for padding tokens. Shape: [batch_size, seq_len]. Defaults to None.
-            use_teacher_forcing (bool, optional): Whether to use teacher forcing for s1 decoding. Defaults to False.
-            s1_targets (torch.Tensor, optional): Target s1 token IDs for teacher forcing. Shape: [batch_size, seq_len]. Defaults to None.
+        参数:
+            s1_ids (torch.Tensor): s1 token ID的输入张量。形状: [batch_size, seq_len]
+            s2_ids (torch.Tensor): s2 token ID的输入张量。形状: [batch_size, seq_len]
+            stamp (torch.Tensor, 可选): 时间戳张量。形状: [batch_size, seq_len]。默认为None。
+            padding_mask (torch.Tensor, 可选): 填充token的掩码。形状: [batch_size, seq_len]。默认为None。
+            use_teacher_forcing (bool, 可选): 是否对s1解码使用teacher forcing。默认为False。
+            s1_targets (torch.Tensor, 可选): teacher forcing的s1 token ID目标。形状: [batch_size, seq_len]。默认为None。
 
-        Returns:
+        返回:
             Tuple[torch.Tensor, torch.Tensor]:
-                - s1 logits: Logits for s1 token predictions. Shape: [batch_size, seq_len, s1_vocab_size]
-                - s2_logits: Logits for s2 token predictions, conditioned on s1. Shape: [batch_size, seq_len, s2_vocab_size]
+                - s1 logits: s1 token预测的logits。形状: [batch_size, seq_len, s1_vocab_size]
+                - s2_logits: 基于s1条件的s2 token预测的logits。形状: [batch_size, seq_len, s2_vocab_size]
         """
         x = self.embedding([s1_ids, s2_ids])
         if stamp is not None:
@@ -271,27 +277,27 @@ class Kronos(nn.Module, PyTorchModelHubMixin):
             sample_s1_ids = torch.multinomial(s1_probs.view(-1, self.s1_vocab_size), 1).view(s1_ids.shape)
             sibling_embed = self.embedding.emb_s1(sample_s1_ids)
 
-        x2 = self.dep_layer(x, sibling_embed, key_padding_mask=padding_mask) # Dependency Aware Layer: Condition on s1 embeddings
+        x2 = self.dep_layer(x, sibling_embed, key_padding_mask=padding_mask) # 依赖感知层：基于s1嵌入的条件
         s2_logits = self.head.cond_forward(x2)
         return s1_logits, s2_logits
 
     def decode_s1(self, s1_ids, s2_ids, stamp=None, padding_mask=None):
         """
-        Decodes only the s1 tokens.
+        仅解码s1 tokens。
 
-        This method performs a forward pass to predict only s1 tokens. It returns the s1 logits
-        and the context representation from the Transformer, which can be used for subsequent s2 decoding.
+        该方法执行前向传播以仅预测s1 tokens。它返回s1 logits和来自Transformer的上下文表示，
+        可用于后续的s2解码。
 
-        Args:
-            s1_ids (torch.Tensor): Input tensor of s1 token IDs. Shape: [batch_size, seq_len]
-            s2_ids (torch.Tensor): Input tensor of s2 token IDs. Shape: [batch_size, seq_len]
-            stamp (torch.Tensor, optional): Temporal stamp tensor. Shape: [batch_size, seq_len]. Defaults to None.
-            padding_mask (torch.Tensor, optional): Mask for padding tokens. Shape: [batch_size, seq_len]. Defaults to None.
+        参数:
+            s1_ids (torch.Tensor): s1 token ID的输入张量。形状: [batch_size, seq_len]
+            s2_ids (torch.Tensor): s2 token ID的输入张量。形状: [batch_size, seq_len]
+            stamp (torch.Tensor, 可选): 时间戳张量。形状: [batch_size, seq_len]。默认为None。
+            padding_mask (torch.Tensor, 可选): 填充token的掩码。形状: [batch_size, seq_len]。默认为None。
 
-        Returns:
+        返回:
             Tuple[torch.Tensor, torch.Tensor]:
-                - s1 logits: Logits for s1 token predictions. Shape: [batch_size, seq_len, s1_vocab_size]
-                - context: Context representation from the Transformer. Shape: [batch_size, seq_len, d_model]
+                - s1 logits: s1 token预测的logits。形状: [batch_size, seq_len, s1_vocab_size]
+                - context: Transformer的上下文表示。形状: [batch_size, seq_len, d_model]
         """
         x = self.embedding([s1_ids, s2_ids])
         if stamp is not None:
@@ -309,19 +315,19 @@ class Kronos(nn.Module, PyTorchModelHubMixin):
 
     def decode_s2(self, context, s1_ids, padding_mask=None):
         """
-        Decodes the s2 tokens, conditioned on the context and s1 tokens.
+        解码s2 tokens，基于上下文和s1 tokens进行条件化。
 
-        This method decodes s2 tokens based on a pre-computed context representation (typically from `decode_s1`)
-        and the s1 token IDs. It uses the dependency-aware layer and the conditional s2 head to predict s2 tokens.
+        该方法基于预计算的上下文表示（通常来自`decode_s1`）和s1 token ID解码s2 tokens。
+        它使用依赖感知层和条件s2头来预测s2 tokens。
 
-        Args:
-            context (torch.Tensor): Context representation from the transformer (output of decode_s1).
-                                     Shape: [batch_size, seq_len, d_model]
-            s1_ids (torch.torch.Tensor): Input tensor of s1 token IDs. Shape: [batch_size, seq_len]
-            padding_mask (torch.Tensor, optional): Mask for padding tokens. Shape: [batch_size, seq_len]. Defaults to None.
+        参数:
+            context (torch.Tensor): 来自transformer的上下文表示（decode_s1的输出）。
+                                    形状: [batch_size, seq_len, d_model]
+            s1_ids (torch.torch.Tensor): s1 token ID的输入张量。形状: [batch_size, seq_len]
+            padding_mask (torch.Tensor, 可选): 填充token的掩码。形状: [batch_size, seq_len]。默认为None。
 
-        Returns:
-            torch.Tensor: s2 logits. Shape: [batch_size, seq_len, s2_vocab_size]
+        返回:
+            torch.Tensor: s2 logits。形状: [batch_size, seq_len, s2_vocab_size]
         """
         sibling_embed = self.embedding.emb_s1(s1_ids)
         x2 = self.dep_layer(context, sibling_embed, key_padding_mask=padding_mask)
@@ -336,7 +342,7 @@ def top_k_top_p_filtering(
         min_tokens_to_keep: int = 1,
 ):
     """Filter a distribution of logits using top-k and/or nucleus (top-p) filtering
-    Args:
+    参数:
         logits: logits distribution shape (batch size, vocabulary size)
         if top_k > 0: keep only top k tokens with highest probability (top-k filtering).
         if top_p < 1.0: keep the top tokens with cumulative probability >= top_p (nucleus filtering).
@@ -345,8 +351,8 @@ def top_k_top_p_filtering(
     From: https://gist.github.com/thomwolf/1a5a29f6962089e871b94cbd09daf317
     """
     if top_k > 0:
-        top_k = min(max(top_k, min_tokens_to_keep), logits.size(-1))  # Safety check
-        # Remove all tokens with a probability less than the last token of the top-k
+        top_k = min(max(top_k, min_tokens_to_keep), logits.size(-1))  # 安全检查
+        # 移除所有概率小于top-k中最后一个token的token
         indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
         logits[indices_to_remove] = filter_value
         return logits
@@ -355,16 +361,16 @@ def top_k_top_p_filtering(
         sorted_logits, sorted_indices = torch.sort(logits, descending=True)
         cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
 
-        # Remove tokens with cumulative probability above the threshold (token with 0 are kept)
+        # 移除累积概率超过阈值的token（保留概率为0的token）
         sorted_indices_to_remove = cumulative_probs > top_p
         if min_tokens_to_keep > 1:
-            # Keep at least min_tokens_to_keep (set to min_tokens_to_keep-1 because we add the first one below)
+            # 至少保留min_tokens_to_keep个token（设置为min_tokens_to_keep-1，因为我们在下面添加第一个）
             sorted_indices_to_remove[..., :min_tokens_to_keep] = 0
-        # Shift the indices to the right to keep also the first token above the threshold
+        # 将索引向右移动以保留第一个超过阈值的token
         sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
         sorted_indices_to_remove[..., 0] = 0
 
-        # scatter sorted tensors to original indexing
+        # 将排序后的张量分散到原始索引
         indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
         logits[indices_to_remove] = filter_value
         return logits
@@ -386,7 +392,7 @@ def sample_from_logits(logits, temperature=1.0, top_k=None, top_p=None, sample_l
     return x
 
 
-def auto_regressive_inference(tokenizer, model, x, x_stamp, y_stamp, max_context, pred_len, clip=5, T=1.0, top_k=0, top_p=0.99, sample_count=5, verbose=False):
+def auto_regressive_inference(tokenizer, model, x, x_stamp, y_stamp, max_context, pred_len, clip=5, T=1.0, top_k=0, top_p=0.99, sample_count=5, verbose=False, progress_callback=None):
     with torch.no_grad():
         batch_size = x.size(0)
         initial_seq_len = x.size(1)
@@ -432,6 +438,11 @@ def auto_regressive_inference(tokenizer, model, x, x_stamp, y_stamp, max_context
             x_token[0] = torch.cat([x_token[0], sample_pre], dim=1)
             x_token[1] = torch.cat([x_token[1], sample_post], dim=1)
 
+            # 调用进度回调函数
+            if progress_callback:
+                progress = (i + 1) / pred_len * 100
+                progress_callback(progress, f"正在预测第 {i+1}/{pred_len} 步...")
+
             torch.cuda.empty_cache()
 
         input_tokens = [t[:, -max_context:].contiguous() for t in x_token]
@@ -454,6 +465,20 @@ def calc_time_stamps(x_timestamp):
 
 
 class KronosPredictor:
+    """
+    KronosPredictor类：Kronos模型的预测接口封装
+
+    该类提供了对Kronos模型的便捷预测接口，支持单序列和批量预测。
+    自动处理数据预处理、标准化、时间戳转换和结果后处理。
+    专门用于金融时间序列的预测任务，支持OHLCV数据和多种采样策略。
+
+    参数:
+        model: 已训练的Kronos模型实例
+        tokenizer: 对应的KronosTokenizer实例
+        device (str): 计算设备，默认为"cuda:0"
+        max_context (int): 最大上下文长度，默认为512
+        clip (float): 数据裁剪阈值，默认为5
+    """
 
     def __init__(self, model, tokenizer, device="cuda:0", max_context=512, clip=5):
         self.tokenizer = tokenizer
@@ -469,18 +494,18 @@ class KronosPredictor:
         self.tokenizer = self.tokenizer.to(self.device)
         self.model = self.model.to(self.device)
 
-    def generate(self, x, x_stamp, y_stamp, pred_len, T, top_k, top_p, sample_count, verbose):
+    def generate(self, x, x_stamp, y_stamp, pred_len, T, top_k, top_p, sample_count, verbose, progress_callback=None):
 
         x_tensor = torch.from_numpy(np.array(x).astype(np.float32)).to(self.device)
         x_stamp_tensor = torch.from_numpy(np.array(x_stamp).astype(np.float32)).to(self.device)
         y_stamp_tensor = torch.from_numpy(np.array(y_stamp).astype(np.float32)).to(self.device)
 
         preds = auto_regressive_inference(self.tokenizer, self.model, x_tensor, x_stamp_tensor, y_stamp_tensor, self.max_context, pred_len,
-                                          self.clip, T, top_k, top_p, sample_count, verbose)
+                                          self.clip, T, top_k, top_p, sample_count, verbose, progress_callback)
         preds = preds[:, -pred_len:, :]
         return preds
 
-    def predict(self, df, x_timestamp, y_timestamp, pred_len, T=1.0, top_k=0, top_p=0.9, sample_count=1, verbose=True):
+    def predict(self, df, x_timestamp, y_timestamp, pred_len, T=1.0, top_k=0, top_p=0.9, sample_count=1, verbose=True, progress_callback=None):
 
         if not isinstance(df, pd.DataFrame):
             raise ValueError("Input must be a pandas DataFrame.")
@@ -490,8 +515,8 @@ class KronosPredictor:
 
         df = df.copy()
         if self.vol_col not in df.columns:
-            df[self.vol_col] = 0.0  # Fill missing volume with zeros
-            df[self.amt_vol] = 0.0  # Fill missing amount with zeros
+            df[self.vol_col] = 0.0  # 用零填充缺失的成交量
+            df[self.amt_vol] = 0.0  # 用零填充缺失的成交额
         if self.amt_vol not in df.columns and self.vol_col in df.columns:
             df[self.amt_vol] = df[self.vol_col] * df[self.price_cols].mean(axis=1)
 
@@ -514,7 +539,11 @@ class KronosPredictor:
         x_stamp = x_stamp[np.newaxis, :]
         y_stamp = y_stamp[np.newaxis, :]
 
-        preds = self.generate(x, x_stamp, y_stamp, pred_len, T, top_k, top_p, sample_count, verbose)
+        # 如果有进度回调函数，修改generate方法以支持进度反馈
+        if progress_callback:
+            preds = self.generate(x, x_stamp, y_stamp, pred_len, T, top_k, top_p, sample_count, verbose, progress_callback)
+        else:
+            preds = self.generate(x, x_stamp, y_stamp, pred_len, T, top_k, top_p, sample_count, verbose)
 
         preds = preds.squeeze(0)
         preds = preds * (x_std + 1e-5) + x_mean
@@ -525,24 +554,24 @@ class KronosPredictor:
 
     def predict_batch(self, df_list, x_timestamp_list, y_timestamp_list, pred_len, T=1.0, top_k=0, top_p=0.9, sample_count=1, verbose=True):
         """
-        Perform parallel (batch) prediction on multiple time series. All series must have the same historical length and prediction length (pred_len).
+        对多个时间序列执行并行（批量）预测。所有序列必须具有相同的历史长度和预测长度（pred_len）。
 
-        Args:
-            df_list (List[pd.DataFrame]): List of input DataFrames, each containing price columns and optional volume/amount columns.
-            x_timestamp_list (List[pd.DatetimeIndex or Series]): List of timestamps corresponding to historical data, length should match the number of rows in each DataFrame.
-            y_timestamp_list (List[pd.DatetimeIndex or Series]): List of future prediction timestamps, length should equal pred_len.
-            pred_len (int): Number of prediction steps.
-            T (float): Sampling temperature.
-            top_k (int): Top-k filtering threshold.
-            top_p (float): Top-p (nucleus sampling) threshold.
-            sample_count (int): Number of parallel samples per series, automatically averaged internally.
-            verbose (bool): Whether to display autoregressive progress.
+        参数:
+            df_list (List[pd.DataFrame]): 输入DataFrame列表，每个包含价格列和可选的成交量/成交额列。
+            x_timestamp_list (List[pd.DatetimeIndex or Series]): 对应历史数据的时间戳列表，长度应与每个DataFrame的行数匹配。
+            y_timestamp_list (List[pd.DatetimeIndex or Series]): 未来预测时间戳列表，长度应等于pred_len。
+            pred_len (int): 预测步数。
+            T (float): 采样温度。
+            top_k (int): Top-k过滤阈值。
+            top_p (float): Top-p（核心采样）阈值。
+            sample_count (int): 每个序列的并行样本数，内部自动平均。
+            verbose (bool): 是否显示自回归进度。
 
-        Returns:
-            List[pd.DataFrame]: List of prediction results in the same order as input, each DataFrame contains
-                                `open, high, low, close, volume, amount` columns, indexed by corresponding `y_timestamp`.
+        返回:
+            List[pd.DataFrame]: 预测结果列表，顺序与输入相同，每个DataFrame包含
+                                `open, high, low, close, volume, amount`列，索引为对应的`y_timestamp`。
         """
-        # Basic validation
+        # 基本验证
         if not isinstance(df_list, (list, tuple)) or not isinstance(x_timestamp_list, (list, tuple)) or not isinstance(y_timestamp_list, (list, tuple)):
             raise ValueError("df_list, x_timestamp_list, y_timestamp_list must be list or tuple types.")
         if not (len(df_list) == len(x_timestamp_list) == len(y_timestamp_list)):
@@ -603,7 +632,7 @@ class KronosPredictor:
             seq_lens.append(x_norm.shape[0])
             y_lens.append(y_stamp.shape[0])
 
-        # Require all series to have consistent historical and prediction lengths for batch processing
+        # 要求所有序列具有一致的历史长度和预测长度以进行批量处理
         if len(set(seq_lens)) != 1:
             raise ValueError(f"Parallel prediction requires all series to have consistent historical lengths, got: {seq_lens}")
         if len(set(y_lens)) != 1:

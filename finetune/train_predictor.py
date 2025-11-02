@@ -28,15 +28,15 @@ from utils.training_utils import (
 
 def create_dataloaders(config: dict, rank: int, world_size: int):
     """
-    Creates and returns distributed dataloaders for training and validation.
+    创建并返回用于训练和验证的分布式数据加载器。
 
-    Args:
-        config (dict): A dictionary of configuration parameters.
-        rank (int): The global rank of the current process.
-        world_size (int): The total number of processes.
+    参数:
+        config (dict): 配置参数字典。
+        rank (int): 当前进程的全局排名。
+        world_size (int): 进程总数。
 
-    Returns:
-        tuple: (train_loader, val_loader, train_dataset, valid_dataset).
+    返回:
+        tuple: (train_loader, val_loader, train_dataset, valid_dataset)。
     """
     print(f"[Rank {rank}] Creating distributed dataloaders...")
     train_dataset = QlibDataset('train')
