@@ -1,40 +1,20 @@
 import requests
-import json
+import time
 
-def test_predict_api():
-    # API端点
-    url = "http://localhost:7070/api/predict"
-    
-    # 预测参数
-    payload = {
-        "file_path": "stock_600519_live",  # 股票代码
-        "lookback": 400,                   # 回看期数
-        "pred_len": 120,                   # 预测期数
-        "temperature": 1.0,                # 温度参数
-        "top_p": 0.9,                      # Top-p采样
-        "sample_count": 1                  # 采样次数
-    }
-    
-    # 设置请求头
-    headers = {
-        'Content-Type': 'application/json'
-    }
-    
-    try:
-        # 发送POST请求
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-        
-        # 检查响应状态码
-        if response.status_code == 200:
-            print("✅ 预测请求成功!")
-            result = response.json()
-            print(f"响应内容: {json.dumps(result, indent=2, ensure_ascii=False)}")
-        else:
-            print(f"❌ 预测请求失败，状态码: {response.status_code}")
-            print(f"错误信息: {response.text}")
-            
-    except requests.exceptions.RequestException as e:
-        print(f"❌ 请求异常: {e}")
+url = "http://localhost:8080/api/akshare/get-stock-data"
+params = {
+    "stock_code": "sz000001",
+    "start_date": "2023-11-01",
+    "end_date": "2023-11-30"
+}
 
-if __name__ == "__main__":
-    test_predict_api()
+print(f"请求URL: {url}")
+print(f"请求参数: {params}")
+
+try:
+    response = requests.get(url, params=params, timeout=30)
+    print(f"状态码: {response.status_code}")
+    print(f"响应头: {response.headers}")
+    print(f"响应内容: {response.text}")
+except Exception as e:
+    print(f"请求失败: {e}")
