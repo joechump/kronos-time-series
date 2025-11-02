@@ -63,11 +63,11 @@ class AkshareDataProvider:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                # 设置默认日期范围（最近1年）
+                # 设置默认日期范围（最近3年）
                 if not end_date:
                     end_date = datetime.now().strftime('%Y%m%d')
                 if not start_date:
-                    start_date = (datetime.now() - timedelta(days=730)).strftime('%Y%m%d')
+                    start_date = (datetime.now() - timedelta(days=1095)).strftime('%Y%m%d')  # 3年
                 
                 logger.info(f"获取股票数据 (尝试 {attempt + 1}/{max_retries}): {symbol}, 周期: {period}, 日期范围: {start_date}-{end_date}")
                 
@@ -207,8 +207,41 @@ class AkshareDataProvider:
                 except Exception as spot_error:
                     logger.warning(f"实时数据接口失败: {spot_error}")
                 
-                # 方法2: 如果实时数据接口失败，尝试使用股票基本信息接口获取名称
+                # 方法2: 优先尝试使用实时数据接口获取完整的股票信息
+                try:
+                    stock_list = ak.stock_zh_a_spot_em()
+                    
+                    # 搜索匹配的股票
+                    if keyword.isdigit():
+                        # 按代码搜索
+                        results = stock_list[stock_list['代码'].str.contains(keyword)]
+                    else:
+                        # 按名称搜索
+                        results = stock_list[stock_list['名称'].str.contains(keyword, case=False)]
+                    
+                    # 格式化结果
+                    stock_results = []
+                    for _, row in results.iterrows():
+                        stock_results.append({
+                            'symbol': row['代码'],
+                            'name': row['名称'],
+                            'latest_price': str(row['最新价']) if pd.notna(row['最新价']) else '-',
+                            'change_rate': str(row['涨跌幅']) if pd.notna(row['涨跌幅']) else '-',
+                            'change_amount': str(row['涨跌额']) if pd.notna(row['涨跌额']) else '-',
+                            'volume': str(row['成交量']) if pd.notna(row['成交量']) else '-',
+                            'amount': str(row['成交额']) if pd.notna(row['成交额']) else '-'
+                        })
+                    
+                    if stock_results:
+                        self.cache[cache_key] = stock_results
+                        return stock_results
+                    
+                except Exception as spot_error:
+                    logger.warning(f"实时数据接口失败: {spot_error}")
+                
+                # 方法3: 如果实时数据接口失败，尝试使用股票基本信息接口获取名称
                 stock_name = f"股票{keyword}"  # 默认名称
+                stock_info_success = False
                 if keyword.isdigit():
                     try:
                         stock_info = ak.stock_individual_info_em(symbol=keyword)
@@ -217,6 +250,19 @@ class AkshareDataProvider:
                             name_row = stock_info[stock_info['item'] == '股票简称']
                             if not name_row.empty:
                                 stock_name = name_row.iloc[0]['value']
+                                stock_info_success = True
+                            # 如果没有找到股票简称，尝试其他可能的字段
+                            else:
+                                name_rows = stock_info[stock_info['item'].str.contains('名称|简称', case=False)]
+                                if not name_rows.empty:
+                                    stock_name = name_rows.iloc[0]['value']
+                                    stock_info_success = True
+                                # 如果还是没有找到，使用第一个非空的名称相关字段
+                                else:
+                                    name_rows = stock_info[stock_info['value'].notna() & stock_info['item'].str.contains('名称|简称|证券', case=False)]
+                                    if not name_rows.empty:
+                                        stock_name = name_rows.iloc[0]['value']
+                                        stock_info_success = True
                     except Exception as info_error:
                         logger.warning(f"股票基本信息接口失败: {info_error}")
                 
@@ -236,7 +282,7 @@ class AkshareDataProvider:
                             # 从历史数据中提取价格信息
                             stock_results = [{
                                 'symbol': keyword,
-                                'name': stock_name,
+                                'name': stock_name,  # 使用从基本信息接口获取的名称，或者默认名称
                                 'latest_price': str(latest_row['收盘']) if '收盘' in latest_row else '-',
                                 'change_rate': str(latest_row['涨跌幅']) if '涨跌幅' in latest_row else '-',
                                 'change_amount': str(latest_row['涨跌额']) if '涨跌额' in latest_row else '-',
@@ -247,6 +293,20 @@ class AkshareDataProvider:
                             return stock_results
                     except Exception as hist_error:
                         logger.warning(f"历史数据接口失败: {hist_error}")
+                
+                # 如果基本信息接口成功获取到了股票名称，但历史数据接口失败，则创建一个基本的股票信息
+                if stock_info_success:
+                    stock_results = [{
+                        'symbol': keyword,
+                        'name': stock_name,
+                        'latest_price': '-',
+                        'change_rate': '-',
+                        'change_amount': '-',
+                        'volume': '-',
+                        'amount': '-'
+                    }]
+                    self.cache[cache_key] = stock_results
+                    return stock_results
                 
                 # 方法4: 如果所有akshare接口都失败，返回模拟数据（用于测试）
                 logger.warning(f"所有akshare接口都失败，返回模拟数据: {keyword}")

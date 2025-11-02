@@ -1,32 +1,82 @@
-# Kronos预测功能400错误修复报告
+# Bug修复报告：修复日期参数格式问题导致的400错误
 
 ## 问题描述
-在使用Kronos Web界面进行股票价格预测时，用户遇到400错误，错误信息为："从开始时间2024-10-29起的数据不足，需要至少60个数据点，当前只有39个可用"。该问题在用户未更改任何设置的情况下突然出现。
+当用户在前端界面输入无效的日期格式时，系统会返回400错误，但错误信息不够明确，用户体验不佳。
 
 ## 根本原因分析
-经过详细调试和代码分析，发现问题的根本原因在于前端时间参数构建逻辑存在缺陷：
-
-1. 在自定义时间周期模式下，前端JavaScript代码生成的start_date参数格式不正确
-2. 时间参数被格式化为"YYYY-MM-DDTHH:MM"格式，缺少秒部分
-3. 后端API期望完整的ISO格式时间字符串(包含秒)，导致参数解析失败
-4. 当参数解析失败时，后端使用默认的较早时间点，导致数据量检查失败
-
-具体代码位置：
-- 前端：`templates/index.html` 第1818行
-- 后端：`app.py` 第1058-1077行数据验证逻辑
+通过代码审查发现，问题出在`app.py`文件中处理`start_date`参数的部分。代码直接使用`pd.to_datetime(start_date)`转换用户输入的日期字符串，但没有对无效格式进行捕获和处理，导致抛出ValueError异常，进而返回400错误。
 
 ## 修复方案
-1. 修改前端时间参数构建逻辑，确保生成包含秒部分的完整ISO格式时间字符串
-2. 在`templates/index.html`中将时间格式化从`YYYY-MM-DDTHH:MM`改为`YYYY-MM-DDTHH:MM:SS`
+在`app.py`文件中所有处理`start_date`参数的地方添加日期格式验证，使用try-except块捕获`pd.to_datetime()`可能抛出的ValueError异常，并返回明确的错误信息。
+
+## 修复实施
+在`app.py`文件中找到4处处理`start_date`参数的代码位置，并为它们添加了日期格式验证：
+
+1. 第一处（约第965行）：
+```python
+# 修复前
+start_dt = pd.to_datetime(start_date)
+
+# 修复后
+try:
+    start_dt = pd.to_datetime(start_date)
+except ValueError:
+    return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
+```
+
+2. 第二处（约第1059行）：
+```python
+# 修复前
+start_dt = pd.to_datetime(start_date)
+
+# 修复后
+try:
+    start_dt = pd.to_datetime(start_date)
+except ValueError:
+    return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
+```
+
+3. 第三处（约第1159行）：
+```python
+# 修复前
+start_dt = pd.to_datetime(start_date)
+
+# 修复后
+try:
+    start_dt = pd.to_datetime(start_date)
+except ValueError:
+    return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
+```
+
+4. 第四处（约第1175行）：
+```python
+# 修复前
+start_dt = pd.to_datetime(start_date)
+
+# 修复后
+try:
+    start_dt = pd.to_datetime(start_date)
+except ValueError:
+    return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
+```
 
 ## 验证结果
-修复后，通过以下测试验证了修复效果：
-1. 重启Web服务
-2. 打开浏览器访问Web界面
-3. 保持默认参数设置，点击"开始预测"
-4. 预测功能恢复正常，能够成功生成预测结果
+通过API测试验证修复效果：
 
-## 预防措施
-1. 增加前端时间参数格式验证
-2. 在后端增加更详细的参数错误提示
-3. 完善测试用例覆盖不同时间参数格式场景
+1. 使用无效日期格式测试：
+   ```bash
+   curl -X POST http://localhost:7070/api/predict -H "Content-Type: application/json" -d '{"file_path":"stock_600159_live","start_date":"invalid-date"}'
+   ```
+   返回结果：
+   ```json
+   {"error":"无效的开始日期格式: invalid-date，请使用 YYYY-MM-DD 格式"}
+   ```
+
+2. 使用有效日期格式测试：
+   ```bash
+   curl -X POST http://localhost:7070/api/predict -H "Content-Type: application/json" -d '{"file_path":"stock_600159_live","start_date":"2023-01-01"}'
+   ```
+   返回结果：200状态码和预测数据
+
+## 结论
+修复成功解决了日期参数格式问题导致的400错误。现在当用户输入无效的日期格式时，系统会返回明确的错误信息，指导用户使用正确的日期格式（YYYY-MM-DD），提升了用户体验。

@@ -2253,12 +2253,36 @@
             updateElementText('data-time-range', `${startDate} 至 ${endDate}`);
             
             // Format price range - handle cases where price data might not be available
-            const minPrice = dataInfo.price_range?.min || dataInfo.min_price || dataInfo.min_close || 0;
-            const maxPrice = dataInfo.price_range?.max || dataInfo.max_price || dataInfo.max_close || 0;
+            // 从后端返回的price_range对象中获取价格范围
+            let minPrice = 0;
+            let maxPrice = 0;
+            
+            // 检查是否存在price_range对象
+            if (dataInfo.price_range) {
+                // 优先使用close价格的范围
+                if (dataInfo.price_range.close) {
+                    minPrice = dataInfo.price_range.close.min;
+                    maxPrice = dataInfo.price_range.close.max;
+                } 
+                // 如果没有close价格，尝试使用其他价格类型
+                else if (dataInfo.price_range.high && dataInfo.price_range.low) {
+                    minPrice = dataInfo.price_range.low.min;
+                    maxPrice = dataInfo.price_range.high.max;
+                }
+                // 如果仍然没有，则使用第一个可用的价格类型
+                else {
+                    const priceTypes = Object.keys(dataInfo.price_range);
+                    if (priceTypes.length > 0) {
+                        const firstPriceType = dataInfo.price_range[priceTypes[0]];
+                        minPrice = firstPriceType.min;
+                        maxPrice = firstPriceType.max;
+                    }
+                }
+            }
             
             // Check if we have valid price data
             if (minPrice > 0 && maxPrice > 0) {
-                updateElementText('data-price-range', `${minPrice.toFixed(4)} - ${maxPrice.toFixed(4)}`);
+                updateElementText('data-price-range', `${minPrice.toFixed(2)} - ${maxPrice.toFixed(2)}`);
             } else {
                 updateElementText('data-price-range', '数据加载中...');
             }

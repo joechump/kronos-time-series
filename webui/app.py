@@ -615,6 +615,17 @@ def get_stock_data():
         # 转换为DataFrame进行处理
         df = pd.DataFrame(stock_data)
         
+        # 计算价格范围
+        price_range = {}
+        if 'open' in df.columns:
+            price_range['open'] = {'min': float(df['open'].min()), 'max': float(df['open'].max())}
+        if 'high' in df.columns:
+            price_range['high'] = {'min': float(df['high'].min()), 'max': float(df['high'].max())}
+        if 'low' in df.columns:
+            price_range['low'] = {'min': float(df['low'].min()), 'max': float(df['low'].max())}
+        if 'close' in df.columns:
+            price_range['close'] = {'min': float(df['close'].min()), 'max': float(df['close'].max())}
+        
         # 准备数据信息
         data_info = {
             'symbol': symbol,
@@ -622,6 +633,7 @@ def get_stock_data():
             'columns': list(df.columns),
             'start_date': df['date'].min() if 'date' in df.columns else None,
             'end_date': df['date'].max() if 'date' in df.columns else None,
+            'price_range': price_range,
             'sample_data': df.head(5).to_dict('records')
         }
         
@@ -860,9 +872,9 @@ def predict():
             if data_provider is None:
                 return jsonify({'error': 'Akshare数据提供者不可用'}), 503
             
-            # 计算近2年的日期范围以确保有足够的数据进行预测
+            # 计算近3年的日期范围以确保有足够的数据进行预测
             end_date = datetime.datetime.now().strftime('%Y%m%d')
-            start_date = (datetime.datetime.now() - datetime.timedelta(days=730)).strftime('%Y%m%d')
+            start_date = (datetime.datetime.now() - datetime.timedelta(days=1095)).strftime('%Y%m%d')  # 3年
             
             # 获取股票数据
             stock_data = data_provider.get_stock_data(stock_code, 'daily', start_date, end_date)
@@ -961,7 +973,10 @@ def predict():
                 
                 if start_date:
                     # Custom time period - fix logic: use data within selected window
-                    start_dt = pd.to_datetime(start_date)
+                    try:
+                        start_dt = pd.to_datetime(start_date)
+                    except Exception as e:
+                        return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
                     
                     # Find data after start time
                     mask = df['timestamps'] >= start_dt
@@ -1033,8 +1048,6 @@ def predict():
                     T=temperature,
                     top_p=top_p,
                     sample_count=sample_count,
-                    trading_mode=trading_mode,
-                    start_date=start_date,
                     progress_callback=progress_callback
                 )
                 
@@ -1054,7 +1067,10 @@ def predict():
                 
                 if start_date:
                     # Custom time period - fix logic: use data within selected window
-                    start_dt = pd.to_datetime(start_date)
+                    try:
+                        start_dt = pd.to_datetime(start_date)
+                    except Exception as e:
+                        return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
                     
                     # Find data after start time
                     mask = df['timestamps'] >= start_dt
@@ -1097,9 +1113,7 @@ def predict():
                     pred_len=pred_len,
                     T=temperature,
                     top_p=top_p,
-                    sample_count=sample_count,
-                    trading_mode=trading_mode,
-                    start_date=start_date
+                    sample_count=sample_count
                 )
                 
             except Exception as e:
@@ -1156,7 +1170,10 @@ def predict():
         # Create chart - pass historical data start position
         if start_date:
             # Custom time period: find starting position of historical data in original df
-            start_dt = pd.to_datetime(start_date)
+            try:
+                start_dt = pd.to_datetime(start_date)
+            except Exception as e:
+                return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
             mask = df['timestamps'] >= start_dt
             historical_start_idx = df[mask].index[0] if len(df[mask]) > 0 else 0
         else:
@@ -1169,7 +1186,10 @@ def predict():
         if 'timestamps' in df.columns:
             if start_date:
                 # Custom time period: use selected window data to calculate timestamps
-                start_dt = pd.to_datetime(start_date)
+                try:
+                    start_dt = pd.to_datetime(start_date)
+                except Exception as e:
+                    return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
                 mask = df['timestamps'] >= start_dt
                 time_range_df = df[mask]
                 
@@ -1495,7 +1515,21 @@ def get_model_status():
                     # 优先使用直接加载的模型信息
                     if direct_model_loaded:
                         model_name = direct_model_info['name']
-                        model_device = direct_model_info['device']
+                        # 从直接加载的模型中获取设备信息
+                        try:
+                            # 重新从direct_model_loader获取带有设备信息的模型数据
+                            if direct_model_loader:
+                                loaded_model = direct_model_loader.get_loaded_model()
+                                if loaded_model:
+                                    model_device = loaded_model.get('device', 'Unknown')
+                                else:
+                                    model_device = direct_model_info.get('device', 'Unknown')
+                            else:
+                                model_device = direct_model_info.get('device', 'Unknown')
+                        except Exception as e:
+                            logger.error(f"获取模型设备信息失败: {str(e)}")
+                            model_device = 'Unknown'
+                        
                         model_healthy = True  # 假设直接加载的模型是健康的
                         param_count = 0  # 直接加载的模型参数数量未知
                         

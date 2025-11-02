@@ -229,6 +229,12 @@ class DirectModelLoader:
                 # 确保返回的字典包含model_name和model_path字段
                 model_data['model_name'] = model_data.get('config', {}).get('name', model_key)
                 model_data['model_path'] = model_data.get('config', {}).get('local_path', 'Unknown')
+                # 添加设备信息
+                try:
+                    model_device = str(next(model_data['model'].parameters()).device)
+                    model_data['device'] = model_device
+                except Exception:
+                    model_data['device'] = 'Unknown'
             return model_data
         
         # 返回第一个加载的模型
@@ -237,6 +243,12 @@ class DirectModelLoader:
             # 确保返回的字典包含model_name和model_path字段
             model_data['model_name'] = model_data.get('config', {}).get('name', list(self.loaded_models.keys())[0])
             model_data['model_path'] = model_data.get('config', {}).get('local_path', 'Unknown')
+            # 添加设备信息
+            try:
+                model_device = str(next(model_data['model'].parameters()).device)
+                model_data['device'] = model_device
+            except Exception:
+                model_data['device'] = 'Unknown'
             return model_data
         
         return None
