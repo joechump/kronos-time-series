@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>强制清除浏览器缓存</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 600px;
+        }
+        h1 {
+            color: #2d3748;
+            margin-bottom: 20px;
+        }
+        p {
+            color: #4a5568;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #5a6fd8;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 强制清除浏览器缓存</h1>
+        <p>此页面将帮助您清除浏览器缓存，确保加载最新的前端代码。</p>
+        <p><strong>问题描述：</strong>前端预测API返回400错误，可能是由于浏览器缓存了旧的JavaScript代码。</p>
+        
+        <button onclick="clearCache()">清除缓存并重定向</button>
+        
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        function clearCache() {
+            const status = document.getElementById('status');
+            
+            try {
+                // 清除localStorage
+                localStorage.clear();
+                console.log('✅ localStorage已清除');
+                
+                // 清除sessionStorage
+                sessionStorage.clear();
+                console.log('✅ sessionStorage已清除');
+                
+                // 清除IndexedDB（如果存在）
+                if (window.indexedDB) {
+                    indexedDB.databases().then(databases => {
+                        databases.forEach(db => {
+                            indexedDB.deleteDatabase(db.name);
+                        });
+                    });
+                    console.log('✅ IndexedDB已清除');
+                }
+                
+                // 清除缓存API（如果支持）
+                if ('caches' in window) {
+                    caches.keys().then(cacheNames => {
+                        cacheNames.forEach(cacheName => {
+                            caches.delete(cacheName);
+                        });
+                    });
+                    console.log('✅ Cache Storage已清除');
+                }
+                
+                // 显示成功消息
+                status.className = 'status success';
+                status.style.display = 'block';
+                status.innerHTML = '✅ 缓存清除成功！正在重定向到主页面...';
+                
+                // 延迟重定向以确保缓存清除完成
+                setTimeout(() => {
+                    // 强制刷新重定向到主页面
+                    window.location.href = 'http://127.0.0.1:7070/?cache_cleared=' + Date.now();
+                }, 1000);
+                
+            } catch (error) {
+                console.error('❌ 清除缓存时发生错误:', error);
+                status.className = 'status error';
+                status.style.display = 'block';
+                status.innerHTML = '❌ 清除缓存时发生错误: ' + error.message;
+            }
+        }
+        
+        // 页面加载时自动清除缓存（可选）
+        // clearCache();
+    </script>
+</body>
+</html>

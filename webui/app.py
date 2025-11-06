@@ -91,7 +91,7 @@ except ImportError:
     MODEL_AVAILABLE = False
     print("警告: 无法导入Kronos模型，将使用模拟数据进行演示")
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # 全局变量存储模型
@@ -972,23 +972,23 @@ def predict():
                 start_date = data.get('start_date')
                 
                 if start_date:
-                    # Custom time period - fix logic: use data within selected window
+                    # Custom time period - fix logic: use data ending at selected start date
                     try:
                         start_dt = pd.to_datetime(start_date)
                     except Exception as e:
                         return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
                     
-                    # Find data after start time
-                    mask = df['timestamps'] >= start_dt
+                    # Find data ending at start time (use data BEFORE the selected date)
+                    mask = df['timestamps'] <= start_dt
                     time_range_df = df[mask]
                     
                     # 确保足够的数据：lookback + pred_len
                     if len(time_range_df) < lookback + pred_len:
-                        return jsonify({'error': f'从开始时间 {start_dt.strftime("%Y-%m-%d %H:%M")} 起的数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(time_range_df)} 个可用'}), 400
+                        return jsonify({'error': f'截止到开始时间 {start_dt.strftime("%Y-%m-%d %H:%M")} 的数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(time_range_df)} 个可用'}), 400
                     
-                    # Use first lookback data points within selected window for prediction
-                    x_df = time_range_df.iloc[:lookback][required_cols]
-                    x_timestamp = time_range_df.iloc[:lookback]['timestamps']
+                    # Use last lookback data points before selected date for prediction
+                    x_df = time_range_df.iloc[-lookback:][required_cols]
+                    x_timestamp = time_range_df.iloc[-lookback:]['timestamps']
                     
                     # Kronos model requires y_timestamp length to equal pred_len
                     # Generate future timestamps based on the last timestamp in x_timestamp
@@ -1066,26 +1066,33 @@ def predict():
                 start_date = data.get('start_date')
                 
                 if start_date:
-                    # Custom time period - fix logic: use data within selected window
+                    # Custom time period - fix logic: use data ending at selected start date
                     try:
                         start_dt = pd.to_datetime(start_date)
                     except Exception as e:
                         return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
                     
-                    # Find data after start time
-                    mask = df['timestamps'] >= start_dt
+                    # Find data ending at start time (use data BEFORE the selected date)
+                    mask = df['timestamps'] <= start_dt
                     time_range_df = df[mask]
                     
                     # 确保足够的数据：lookback + pred_len
                     if len(time_range_df) < lookback + pred_len:
-                        return jsonify({'error': f'从开始时间 {start_dt.strftime("%Y-%m-%d %H:%M")} 起的数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(time_range_df)} 个可用'}), 400
+                        return jsonify({'error': f'截止到开始时间 {start_dt.strftime("%Y-%m-%d %H:%M")} 的数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(time_range_df)} 个可用'}), 400
                     
-                    # Use first lookback data points within selected window for prediction
-                    x_df = time_range_df.iloc[:lookback][required_cols]
-                    x_timestamp = time_range_df.iloc[:lookback]['timestamps']
+                    # Use last lookback data points before selected date for prediction
+                    x_df = time_range_df.iloc[-lookback:][required_cols]
+                    x_timestamp = time_range_df.iloc[-lookback:]['timestamps']
                     
-                    # Use last pred_len data points within selected window as actual values
-                    y_timestamp = time_range_df.iloc[lookback:lookback+pred_len]['timestamps']
+                    # Generate future timestamps for prediction (not actual values)
+                    last_timestamp = x_timestamp.iloc[-1]
+                    time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0]
+                    future_timestamps = pd.date_range(
+                        start=last_timestamp + time_diff,
+                        periods=pred_len,
+                        freq=time_diff
+                    )
+                    y_timestamp = pd.Series(future_timestamps, name='timestamps')
                     
                     # Calculate actual time period length
                     start_timestamp = time_range_df['timestamps'].iloc[0]
@@ -1126,29 +1133,32 @@ def predict():
         actual_df = None
         
         if start_date:  # Custom time period
-            # Fix logic: use data within selected window
-            # Prediction uses first 400 data points within selected window
-            # Actual data should be last 120 data points within selected window
+            # Fix logic: use data ending at selected start date
+            # Prediction uses last 400 data points before selected date
+            # Actual data should be the 120 data points after the selected date
             start_dt = pd.to_datetime(start_date)
             
-            # Find data starting from start_date
-            mask = df['timestamps'] >= start_dt
+            # Find data ending at start date
+            mask = df['timestamps'] <= start_dt
             time_range_df = df[mask]
             
-            if len(time_range_df) >= lookback + pred_len:
-                # Get last 120 data points within selected window as actual values
-                actual_df = time_range_df.iloc[lookback:lookback+pred_len]
+            if len(time_range_df) >= lookback:
+                # Get data after the selected date as actual values
+                # Find data starting from the day after selected date
+                next_day_mask = df['timestamps'] > start_dt
+                actual_df = df[next_day_mask].iloc[:pred_len] if len(df[next_day_mask]) >= pred_len else None
                 
-                for i, (_, row) in enumerate(actual_df.iterrows()):
-                    actual_data.append({
-                        'timestamp': row['timestamps'].isoformat(),
-                        'open': float(row['open']),
-                        'high': float(row['high']),
-                        'low': float(row['low']),
-                        'close': float(row['close']),
-                        'volume': float(row['volume']) if 'volume' in row else 0,
-                        'amount': float(row['amount']) if 'amount' in row else 0
-                    })
+                if actual_df is not None:
+                    for i, (_, row) in enumerate(actual_df.iterrows()):
+                        actual_data.append({
+                            'timestamp': row['timestamps'].isoformat(),
+                            'open': float(row['open']),
+                            'high': float(row['high']),
+                            'low': float(row['low']),
+                            'close': float(row['close']),
+                            'volume': float(row['volume']) if 'volume' in row else 0,
+                            'amount': float(row['amount']) if 'amount' in row else 0
+                        })
         else:  # Latest data
             # Prediction uses first 400 data points
             # Actual data should be 120 data points after first 400 data points
@@ -1174,8 +1184,9 @@ def predict():
                 start_dt = pd.to_datetime(start_date)
             except Exception as e:
                 return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
-            mask = df['timestamps'] >= start_dt
-            historical_start_idx = df[mask].index[0] if len(df[mask]) > 0 else 0
+            # Use data ending at selected date for historical display
+            mask = df['timestamps'] <= start_dt
+            historical_start_idx = max(0, len(df[mask]) - lookback) if len(df[mask]) > 0 else 0
         else:
             # Latest data: start from beginning
             historical_start_idx = 0
@@ -1185,17 +1196,17 @@ def predict():
         # Prepare prediction result data - fix timestamp calculation logic
         if 'timestamps' in df.columns:
             if start_date:
-                # Custom time period: use selected window data to calculate timestamps
+                # Custom time period: use data ending at selected date to calculate timestamps
                 try:
                     start_dt = pd.to_datetime(start_date)
                 except Exception as e:
                     return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
-                mask = df['timestamps'] >= start_dt
+                mask = df['timestamps'] <= start_dt
                 time_range_df = df[mask]
                 
                 if len(time_range_df) >= lookback:
-                    # Calculate prediction timestamps starting from last time point of selected window
-                    last_timestamp = time_range_df['timestamps'].iloc[lookback-1]
+                    # Calculate prediction timestamps starting from the day after selected date
+                    last_timestamp = time_range_df['timestamps'].iloc[-1]
                     time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0]
                     future_timestamps = pd.date_range(
                         start=last_timestamp + time_diff,

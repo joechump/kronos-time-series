@@ -1,0 +1,97 @@
+{
+  "timestamp": "2025-11-04T21:47:11.577798",
+  "file_path": "stock_600519_live",
+  "prediction_type": "Kronos model prediction (latest data)",
+  "prediction_params": {
+    "lookback": 50,
+    "pred_len": 1,
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "sample_count": 1,
+    "start_date": "latest"
+  },
+  "input_data_summary": {
+    "rows": 50,
+    "columns": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "price_range": {
+      "open": {
+        "min": 7850.12,
+        "max": 10181.17
+      },
+      "high": {
+        "min": 8056.14,
+        "max": 10427.39
+      },
+      "low": {
+        "min": 7805.65,
+        "max": 10156.05
+      },
+      "close": {
+        "min": 7930.02,
+        "max": 10316.34
+      }
+    },
+    "last_values": {
+      "open": 10181.17,
+      "high": 10427.39,
+      "low": 10156.05,
+      "close": 10316.34
+    }
+  },
+  "prediction_results": [
+    {
+      "timestamp": "2025-11-05T00:00:00",
+      "open": 8851.037109375,
+      "high": 9211.29296875,
+      "low": 8988.6513671875,
+      "close": 9125.369140625,
+      "volume": 31661.974609375,
+      "amount": 278468864.0
+    }
+  ],
+  "actual_data": [
+    {
+      "timestamp": "2023-01-17T00:00:00",
+      "open": 10317.65,
+      "high": 10367.09,
+      "low": 10226.4,
+      "close": 10291.72,
+      "volume": 21299.0,
+      "amount": 4068321409.0
+    }
+  ],
+  "analysis": {
+    "continuity": {
+      "last_prediction": {
+        "open": 8851.037109375,
+        "high": 9211.29296875,
+        "low": 8988.6513671875,
+        "close": 9125.369140625
+      },
+      "first_actual": {
+        "open": 10317.65,
+        "high": 10367.09,
+        "low": 10226.4,
+        "close": 10291.72
+      },
+      "gaps": {
+        "open_gap": 1466.6128906249996,
+        "high_gap": 1155.7970312500001,
+        "low_gap": 1237.7486328124996,
+        "close_gap": 1166.3508593749993
+      },
+      "gap_percentages": {
+        "open_gap_pct": 14.214602071450374,
+        "high_gap_pct": 11.148712235063071,
+        "low_gap_pct": 12.103463905308805,
+        "close_gap_pct": 11.332905086564727
+      }
+    }
+  }
+}

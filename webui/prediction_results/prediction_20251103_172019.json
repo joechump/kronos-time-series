@@ -1,0 +1,169 @@
+{
+  "timestamp": "2025-11-03T17:20:19.386172",
+  "file_path": "stock_600519_live",
+  "prediction_type": "Kronos model prediction (latest data)",
+  "prediction_params": {
+    "lookback": 30,
+    "pred_len": 5,
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "sample_count": 1,
+    "start_date": "null"
+  },
+  "input_data_summary": {
+    "rows": 30,
+    "columns": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "price_range": {
+      "open": {
+        "min": 7819.77,
+        "max": 9664.07
+      },
+      "high": {
+        "min": 8056.14,
+        "max": 9719.34
+      },
+      "low": {
+        "min": 7805.65,
+        "max": 9538.45
+      },
+      "close": {
+        "min": 7930.02,
+        "max": 9573.58
+      }
+    },
+    "last_values": {
+      "open": 9664.07,
+      "high": 9719.34,
+      "low": 9538.45,
+      "close": 9573.58
+    }
+  },
+  "prediction_results": [
+    {
+      "timestamp": "2025-11-06T00:00:00",
+      "open": 8419.091796875,
+      "high": -6.314445334446423e+35,
+      "low": 2.5571160411794614e+36,
+      "close": 1.285391449606586e+36,
+      "volume": -1.4085731878025933e+38,
+      "amount": -Infinity
+    },
+    {
+      "timestamp": "2025-11-09T00:00:00",
+      "open": 8422.001953125,
+      "high": -6.314445334446423e+35,
+      "low": 2.5571160411794614e+36,
+      "close": 1.285391449606586e+36,
+      "volume": -1.4085731878025933e+38,
+      "amount": -Infinity
+    },
+    {
+      "timestamp": "2025-11-12T00:00:00",
+      "open": 8392.5107421875,
+      "high": -6.314445334446423e+35,
+      "low": 2.5571160411794614e+36,
+      "close": 1.285391449606586e+36,
+      "volume": -1.4085731878025933e+38,
+      "amount": -Infinity
+    },
+    {
+      "timestamp": "2025-11-15T00:00:00",
+      "open": 8425.916015625,
+      "high": -6.314445334446423e+35,
+      "low": 2.5571160411794614e+36,
+      "close": 1.285391449606586e+36,
+      "volume": -1.4085731878025933e+38,
+      "amount": -Infinity
+    },
+    {
+      "timestamp": "2025-11-18T00:00:00",
+      "open": 8395.86328125,
+      "high": -6.314445334446423e+35,
+      "low": 2.5571160411794614e+36,
+      "close": 1.285391449606586e+36,
+      "volume": -1.4085731878025933e+38,
+      "amount": -Infinity
+    }
+  ],
+  "actual_data": [
+    {
+      "timestamp": "2022-12-16T00:00:00",
+      "open": 9504.53,
+      "high": 9593.72,
+      "low": 9352.53,
+      "close": 9572.97,
+      "volume": 33303.0,
+      "amount": 5901587128.0
+    },
+    {
+      "timestamp": "2022-12-19T00:00:00",
+      "open": 9632.92,
+      "high": 9632.92,
+      "low": 9438.81,
+      "close": 9503.28,
+      "volume": 24987.0,
+      "amount": 4447236356.0
+    },
+    {
+      "timestamp": "2022-12-20T00:00:00",
+      "open": 9464.74,
+      "high": 9464.74,
+      "low": 9048.28,
+      "close": 9211.84,
+      "volume": 46198.0,
+      "amount": 7944120661.0
+    },
+    {
+      "timestamp": "2022-12-21T00:00:00",
+      "open": 9257.06,
+      "high": 9332.44,
+      "low": 9225.16,
+      "close": 9332.44,
+      "volume": 22816.0,
+      "amount": 3948926227.0
+    },
+    {
+      "timestamp": "2022-12-22T00:00:00",
+      "open": 9421.37,
+      "high": 9553.53,
+      "low": 9362.58,
+      "close": 9478.15,
+      "volume": 23175.0,
+      "amount": 4093861570.0
+    }
+  ],
+  "analysis": {
+    "continuity": {
+      "last_prediction": {
+        "open": 8419.091796875,
+        "high": -6.314445334446423e+35,
+        "low": 2.5571160411794614e+36,
+        "close": 1.285391449606586e+36
+      },
+      "first_actual": {
+        "open": 9504.53,
+        "high": 9593.72,
+        "low": 9352.53,
+        "close": 9572.97
+      },
+      "gaps": {
+        "open_gap": 1085.4382031250007,
+        "high_gap": 6.314445334446423e+35,
+        "low_gap": 2.5571160411794614e+36,
+        "close_gap": 1.285391449606586e+36
+      },
+      "gap_percentages": {
+        "open_gap_pct": 11.420219654470031,
+        "high_gap_pct": 6.581852852122455e+33,
+        "low_gap_pct": 2.7341436393996715e+34,
+        "close_gap_pct": 1.3427300509732989e+34
+      }
+    }
+  }
+}

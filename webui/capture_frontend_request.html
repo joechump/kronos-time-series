@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端请求捕获工具</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 15px; margin: 5px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .log { max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background-color: #f5f5f5; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 前端预测请求捕获工具</h1>
+        
+        <div class="section info">
+            <h3>📋 使用说明</h3>
+            <p>此工具帮助您捕获前端实际发送的预测请求参数，以便分析400错误的原因。</p>
+            <ol>
+                <li>在浏览器中打开Kronos股票预测系统 (http://localhost:8080)</li>
+                <li>打开开发者工具 (F12)</li>
+                <li>切换到控制台 (Console) 标签页</li>
+                <li>复制并运行下面的JavaScript代码</li>
+                <li>查看捕获的请求参数</li>
+            </ol>
+        </div>
+        
+        <div class="section">
+            <h3>📜 捕获脚本代码</h3>
+            <pre id="captureScript">
+// 前端预测请求捕获脚本
+console.log('🔍 开始捕获预测请求参数...');
+
+// 保存原始的axios.post方法
+const originalAxiosPost = axios.post;
+
+// 重写axios.post方法以捕获请求
+axios.post = function(url, data, config) {
+    console.log('🚀 捕获到请求发送:');
+    console.log('   请求URL:', url);
+    console.log('   请求方法: POST');
+    console.log('   请求数据:', JSON.stringify(data, null, 2));
+    console.log('   请求时间:', new Date().toISOString());
+    
+    // 调用原始方法
+    return originalAxiosPost.call(this, url, data, config).then(response => {
+        console.log('✅ 请求成功:');
+        console.log('   响应状态码:', response.status);
+        console.log('   响应数据:', JSON.stringify(response.data, null, 2));
+        return response;
+    }).catch(error => {
+        console.log('❌ 请求失败:');
+        console.log('   错误状态码:', error.response?.status);
+        console.log('   错误信息:', error.response?.data);
+        console.log('   完整错误:', error);
+        throw error;
+    });
+};
+
+console.log('✅ 请求捕获已启用，现在点击预测按钮即可查看详细请求信息');
+
+// 提供手动检查当前状态的函数
+function checkCurrentState() {
+    console.log('📊 当前前端状态:');
+    console.log('   股票代码:', document.getElementById('stock-code-input')?.value || '未设置');
+    console.log('   模型加载状态:', window.modelLoaded || false);
+    console.log('   当前数据文件:', window.currentDataFile || '未设置');
+    console.log('   lookback参数:', document.getElementById('lookback')?.value || '默认值');
+    console.log('   pred-len参数:', document.getElementById('pred-len')?.value || '默认值');
+    console.log('   start-date参数:', document.getElementById('prediction-start-date')?.value || '未设置');
+}
+
+// 提供禁用捕获的函数
+function disableCapture() {
+    axios.post = originalAxiosPost;
+    console.log('🔕 请求捕获已禁用');
+}
+
+console.log('💡 可用命令:');
+console.log('   checkCurrentState() - 检查当前前端状态');
+console.log('   disableCapture() - 禁用请求捕获');
+            </pre>
+            <button onclick="copyScript()">📋 复制脚本代码</button>
+        </div>
+        
+        <div class="section">
+            <h3>🔧 替代方案：手动检查函数</h3>
+            <pre>
+// 手动检查预测请求参数的函数
+function debugPredictionRequest() {
+    console.log('🔍 手动检查预测请求参数...');
+    
+    // 检查当前状态
+    const stockCode = document.getElementById('stock-code-input')?.value?.trim() || '';
+    const modelLoaded = window.modelLoaded || false;
+    const currentDataFile = window.currentDataFile || '';
+    
+    console.log('📊 当前状态:');
+    console.log('   股票代码:', stockCode);
+    console.log('   模型加载状态:', modelLoaded);
+    console.log('   当前数据文件:', currentDataFile);
+    
+    // 获取预测参数
+    function getParamValue(paramId, defaultValue) {
+        const element = document.getElementById(paramId);
+        if (!element) return defaultValue;
+        const value = element.value;
+        return (value !== null && value !== undefined && value !== '') ? value : defaultValue;
+    }
+    
+    const lookback = parseInt(getParamValue('lookback', '100'));
+    const predLen = parseInt(getParamValue('pred-len', '30'));
+    const startDate = getParamValue('prediction-start-date', '');
+    const temperature = parseFloat(getParamValue('temperature', '1.3'));
+    const topP = parseFloat(getParamValue('top-p', '0.98'));
+    const sampleCount = parseInt(getParamValue('sample-count', '2'));
+    
+    console.log('📋 预测参数:');
+    console.log('   lookback:', lookback);
+    console.log('   pred_len:', predLen);
+    console.log('   start_date:', startDate);
+    console.log('   temperature:', temperature);
+    console.log('   top_p:', topP);
+    console.log('   sample_count:', sampleCount);
+    
+    // 构建预测请求参数
+    const predictionParams = {
+        file_path: currentDataFile,
+        lookback: lookback,
+        pred_len: predLen,
+        start_date: startDate,
+        temperature: temperature,
+        top_p: topP,
+        sample_count: sampleCount
+    };
+    
+    console.log('🚀 即将发送的预测请求参数:');
+    console.log(JSON.stringify(predictionParams, null, 2));
+    
+    return predictionParams;
+}
+
+// 运行调试函数
+debugPredictionRequest();
+            </pre>
+            <button onclick="copyManualScript()">📋 复制手动检查脚本</button>
+        </div>
+        
+        <div class="section success">
+            <h3>✅ 测试结果分析</h3>
+            <p>根据后端API测试结果，所有测试用例都返回了200状态码，表明后端API本身是正常的。</p>
+            <p><strong>问题可能出现在：</strong></p>
+            <ul>
+                <li>前端发送的请求参数格式不正确</li>
+                <li>前端请求的URL或端口不正确</li>
+                <li>前端请求头设置有问题</li>
+                <li>浏览器缓存或网络问题</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        function copyScript() {
+            const script = document.getElementById('captureScript').textContent;
+            navigator.clipboard.writeText(script).then(() => {
+                alert('✅ 脚本代码已复制到剪贴板');
+            }).catch(err => {
+                alert('❌ 复制失败: ' + err);
+            });
+        }
+        
+        function copyManualScript() {
+            const manualScript = document.querySelector('.section:nth-child(3) pre').textContent;
+            navigator.clipboard.writeText(manualScript).then(() => {
+                alert('✅ 手动检查脚本已复制到剪贴板');
+            }).catch(err => {
+                alert('❌ 复制失败: ' + err);
+            });
+        }
+    </script>
+</body>
+</html>

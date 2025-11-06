@@ -621,7 +621,7 @@ class AkshareDataProvider:
                             end_dt = pd.to_datetime(end_date)
                             
                             filtered_data = stock_data[
-                                (stock_data['date'] >= start_dt) & 
+                                (stock_data['date'] <= start_dt) & 
                                 (stock_data['date'] <= end_dt)
                             ]
                             
