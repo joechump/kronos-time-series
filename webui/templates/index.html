@@ -1478,9 +1478,9 @@
                 
                 console.log('✅ 状态检查通过，开始预测...');
                 
-                // 使用后端默认参数
-                const lookback = 30; // 减少lookback值，避免数据不足
-                const predLen = 5;  // 减少预测长度
+                // 使用预期参数值
+                const lookback = 120; // 使用120天回顾期
+                const predLen = 30;  // 预测30天
                 
                 // Check if trading calendar mode is enabled
                 const tradingMode = getParamValue('trading-mode', 'calendar');

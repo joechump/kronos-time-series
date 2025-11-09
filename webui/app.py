@@ -300,6 +300,36 @@ def save_prediction_results(file_path, prediction_type, prediction_results, actu
         print(f"Failed to save prediction results: {e}")
         return None
 
+def generate_trading_day_timestamps(last_date, num_days):
+    """
+    生成指定数量的交易日时间戳
+    
+    参数:
+        last_date: 最后一个历史日期
+        num_days: 需要生成的交易日数量
+        
+    返回:
+        list: 交易日时间戳列表
+    """
+    trading_days = []
+    
+    # 确保last_date是datetime对象
+    if not isinstance(last_date, pd.Timestamp):
+        last_date = pd.to_datetime(last_date)
+    
+    # 格式化日期为YYYYMMDD格式
+    current_date_str = last_date.strftime('%Y%m%d')
+    
+    # 生成指定数量的交易日
+    for i in range(1, num_days + 1):
+        # 获取下一个交易日
+        next_trading_day_str = data_provider.get_next_trading_day(current_date_str, i)
+        # 转换为datetime对象并添加到列表
+        next_trading_day = pd.to_datetime(next_trading_day_str)
+        trading_days.append(next_trading_day)
+    
+    return trading_days
+
 def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, historical_start_idx=0):
     """
     创建美观的预测图表
@@ -399,12 +429,16 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
             else:
                 time_diff = pd.Timedelta(hours=1)
             
-            # 生成预测时间戳
-            pred_timestamps = pd.date_range(
-                start=last_timestamp + time_diff,
-                periods=len(pred_df),
-                freq=time_diff
-            )
+            # 生成预测时间戳 - 使用交易日历
+            if data_provider:
+                pred_timestamps = generate_trading_day_timestamps(last_timestamp, len(pred_df))
+            else:
+                # 降级方案：使用简单的时间差
+                pred_timestamps = pd.date_range(
+                    start=last_timestamp + time_diff,
+                    periods=len(pred_df),
+                    freq=time_diff
+                )
         else:
             pred_timestamps = range(len(historical_df), len(historical_df) + len(pred_df))
         
@@ -434,11 +468,16 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
                         time_diff = pd.to_datetime(df['timestamps'].iloc[1]) - pd.to_datetime(df['timestamps'].iloc[0])
                     else:
                         time_diff = pd.Timedelta(hours=1)
-                    actual_timestamps = pd.date_range(
-                        start=last_timestamp + time_diff,
-                        periods=len(actual_df),
-                        freq=time_diff
-                    )
+                    # 使用交易日历生成实际数据时间戳
+                    if data_provider:
+                        actual_timestamps = generate_trading_day_timestamps(last_timestamp, len(actual_df))
+                    else:
+                        # 降级方案：使用简单的时间差
+                        actual_timestamps = pd.date_range(
+                            start=last_timestamp + time_diff,
+                            periods=len(actual_df),
+                            freq=time_diff
+                        )
                 else:
                     actual_timestamps = range(len(historical_df), len(historical_df) + len(actual_df))
         else:
@@ -987,11 +1026,16 @@ def predict():
                     # 预测从lookback数据点之后开始
                     last_timestamp = x_timestamp.iloc[-1]
                     time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0]
-                    future_timestamps = pd.date_range(
-                        start=last_timestamp + time_diff,
-                        periods=pred_len,
-                        freq=time_diff
-                    )
+                    # 生成预测时间戳 - 使用交易日历
+                    if data_provider:
+                        future_timestamps = generate_trading_day_timestamps(last_timestamp, pred_len)
+                    else:
+                        # 降级方案：使用简单的时间差
+                        future_timestamps = pd.date_range(
+                            start=last_timestamp + time_diff,
+                            periods=pred_len,
+                            freq=time_diff
+                        )
                     y_timestamp = pd.Series(future_timestamps, name='timestamps')
                     
                     # Calculate actual time period length
@@ -1009,11 +1053,16 @@ def predict():
                 # Generate future timestamps based on the last timestamp in x_timestamp
                 last_timestamp = x_timestamp.iloc[-1]
                 time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0]
-                future_timestamps = pd.date_range(
-                    start=last_timestamp + time_diff,
-                    periods=pred_len,
-                    freq=time_diff
-                )
+                # 生成预测时间戳 - 使用交易日历
+                if data_provider:
+                    future_timestamps = generate_trading_day_timestamps(last_timestamp, pred_len)
+                else:
+                    # 降级方案：使用简单的时间差
+                    future_timestamps = pd.date_range(
+                        start=last_timestamp + time_diff,
+                        periods=pred_len,
+                        freq=time_diff
+                    )
                 y_timestamp = pd.Series(future_timestamps, name='timestamps')
                 
                 prediction_type = "Kronos model prediction (latest data)"
@@ -1219,11 +1268,16 @@ def predict():
                 # Latest data: calculate from last time point of entire data file
                 last_timestamp = df['timestamps'].iloc[-1]
                 time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0]
-                future_timestamps = pd.date_range(
-                    start=last_timestamp + time_diff,
-                    periods=pred_len,
-                    freq=time_diff
-                )
+                # 生成预测时间戳 - 使用交易日历
+                if data_provider:
+                    future_timestamps = generate_trading_day_timestamps(last_timestamp, pred_len)
+                else:
+                    # 降级方案：使用简单的时间差
+                    future_timestamps = pd.date_range(
+                        start=last_timestamp + time_diff,
+                        periods=pred_len,
+                        freq=time_diff
+                    )
         else:
             future_timestamps = range(len(df), len(df) + pred_len)
         

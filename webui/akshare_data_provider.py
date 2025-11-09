@@ -564,11 +564,11 @@ class AkshareDataProvider:
             import requests
             import json
             
-            # 设置默认日期范围
+            # 设置默认日期范围（与主方法保持一致，最近3年）
             if not end_date:
                 end_date = datetime.now().strftime('%Y%m%d')
             if not start_date:
-                start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
+                start_date = (datetime.now() - timedelta(days=1095)).strftime('%Y%m%d')
             
             logger.info(f"尝试备用数据源获取股票数据: {symbol}, 周期: {period}, 日期范围: {start_date}-{end_date}")
             
@@ -643,7 +643,7 @@ class AkshareDataProvider:
                             end_dt = pd.to_datetime(end_date)
                             
                             filtered_data = stock_data[
-                                (stock_data['date'] <= start_dt) & 
+                                (stock_data['date'] >= start_dt) & 
                                 (stock_data['date'] <= end_dt)
                             ]
                             
@@ -679,11 +679,11 @@ class AkshareDataProvider:
             pandas.DataFrame: 模拟股票数据
         """
         try:
-            # 设置默认日期范围
+            # 设置默认日期范围（与主方法保持一致，最近3年）
             if not end_date:
                 end_date = datetime.now().strftime('%Y%m%d')
             if not start_date:
-                start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
+                start_date = (datetime.now() - timedelta(days=1095)).strftime('%Y%m%d')
             
             logger.info(f"创建本地模拟数据: {symbol}, 周期: {period}, 日期范围: {start_date}-{end_date}")
             
