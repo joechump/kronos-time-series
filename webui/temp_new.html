@@ -1051,11 +1051,7 @@
                             <small class="form-text">选择预测时间轴是否考虑交易日历</small>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="prediction-start-date">预测起始日期：</label>
-                            <input type="date" id="prediction-start-date" class="form-control">
-                            <small class="form-text">设置预测的起始日期（自动识别下一个交易日）</small>
-                        </div>
+
                         
                         <button id="load-calendar-btn" class="btn btn-outline-secondary">
                             📅 加载交易日历
@@ -1719,11 +1715,10 @@
                 if (tradingMode !== 'calendar') {
                     predictionParams.trading_mode = tradingMode;
                     
-                    // Use trading calendar start date if specified
-                    const calendarStartDate = document.getElementById('prediction-start-date').value;
-                    if (calendarStartDate) {
-                        predictionParams.start_date = calendarStartDate + 'T00:00';
-                    }
+                    // Use default start date (next business day) for trading calendar
+                    const nextBusinessDay = getNextBusinessDay();
+                    predictionParams.start_date = nextBusinessDay + 'T00:00';
+                    console.log('📅 使用默认预测起始日期:', predictionParams.start_date);
                 }
                 
                 console.log('🚀 开始预测，参数:', predictionParams);
@@ -1914,12 +1909,9 @@
         // Trading calendar functions
         function loadTradingCalendar() {
             const mode = document.getElementById('trading-mode').value;
-            const startDate = document.getElementById('prediction-start-date').value;
+            const startDate = getNextBusinessDay(); // 使用默认日期
             
-            if (!startDate) {
-                showStatus('error', '请选择预测起始日期');
-                return;
-            }
+            console.log('📅 交易日历使用默认起始日期:', startDate);
             
             showLoading(true);
             
@@ -2227,6 +2219,24 @@
                 });
         }
 
+        // Get next business day (skip weekends)
+        function getNextBusinessDay(startDate = new Date()) {
+            const date = new Date(startDate);
+            const day = date.getDay();
+            
+            // If Saturday, add 2 days to get to Monday
+            if (day === 6) {
+                date.setDate(date.getDate() + 2);
+            }
+            // If Sunday, add 1 day to get to Monday
+            else if (day === 0) {
+                date.setDate(date.getDate() + 1);
+            }
+            // Weekday, use as is
+            
+            return date;
+        }
+
         // Set up event listeners
         function setupEventListeners() {
             // Load data button
@@ -2245,8 +2255,11 @@
                 loadCalendarBtn.addEventListener('click', loadTradingCalendar);
             }
             
+            // 预测起始日期使用默认值（下一个工作日）
+            const nextBusinessDay = getNextBusinessDay();
+            const formattedDate = nextBusinessDay.toISOString().split('T')[0];
+            console.log('📅 使用默认预测起始日期（下一个工作日）:', formattedDate);
 
-            
             // Prediction button
             document.getElementById('predict-btn').addEventListener('click', startPrediction);
             

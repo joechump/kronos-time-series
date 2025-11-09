@@ -601,79 +601,7 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Time window selector styles */
-        .time-window-container {
-            background: #f7fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .time-window-container h3 {
-            color: #4a5568;
-            margin-bottom: 15px;
-            font-size: 1.1rem;
-        }
-
-        .time-window-info {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 15px;
-            font-size: 12px;
-            color: #666;
-        }
-
-        .time-window-slider {
-            position: relative;
-            margin-bottom: 10px;
-        }
-
-        .slider-track {
-            position: relative;
-            height: 6px;
-            background: #e2e8f0;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-
-        .slider-handle {
-            position: absolute;
-            top: -7px;
-            width: 20px;
-            height: 20px;
-            background: #667eea;
-            border-radius: 50%;
-            cursor: grab;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            z-index: 10;
-        }
-
-        .slider-handle:hover {
-            background: #5a67d8;
-            transform: scale(1.1);
-        }
-
-        .slider-handle:active {
-            cursor: grabbing;
-        }
-
-        .slider-selection {
-            position: absolute;
-            height: 6px;
-            background: #48bb78;
-            border-radius: 3px;
-            top: 0;
-        }
-
-        .slider-labels {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: #999;
-            margin-top: 5px;
-        }
+        /* Time window selector styles - 已移除 */
 
         /* Comparison analysis styles */
         .comparison-section {
@@ -1107,8 +1035,8 @@
                         
                         <div class="form-group">
                             <label for="prediction-start-date">预测起始日期：</label>
-                            <input type="date" id="prediction-start-date" class="form-control">
-                            <small class="form-text">设置预测的起始日期（自动识别下一个交易日）</small>
+                            <input type="date" id="prediction-start-date" class="form-control" value="">
+                            <small class="form-text">设置数据获取的开始日期（留空使用最新数据）</small>
                         </div>
                         
                         <button id="load-calendar-btn" class="btn btn-outline-secondary">
@@ -1123,62 +1051,38 @@
                     </div>
                 </div>
 
-                <!-- Time Window Selector -->
-                <div class="time-window-container">
-                    <h3>⏰ 时间窗口选择</h3>
-                    <div class="time-window-info">
-                        <span id="window-start">开始：--</span>
-                        <span id="window-end">结束：--</span>
-                        <span id="window-size">窗口大小：400+120=520个数据点</span>
-                    </div>
-                    
-                    <div class="time-window-slider">
-                        <div class="slider-track">
-                            <div class="slider-handle start-handle" id="start-handle"></div>
-                            <div class="slider-selection" id="slider-selection"></div>
-                            <div class="slider-handle end-handle" id="end-handle"></div>
+                <!-- Prediction Parameters (Hidden - Using Default Values) -->
+                <input type="hidden" id="lookback" value="400">
+                <input type="hidden" id="pred-len" value="120">
+                <input type="hidden" id="temperature" value="1.0">
+                <input type="hidden" id="top-p" value="0.9">
+                <input type="hidden" id="sample-count" value="1">
+                
+                <div class="prediction-info">
+                    <h3>⚙️ 预测参数设置</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">回看窗口：</span>
+                            <span class="info-value">400个数据点</span>
                         </div>
-                        <div class="slider-labels">
-                            <span id="min-label">最早</span>
-                            <span id="max-label">最新</span>
+                        <div class="info-item">
+                            <span class="info-label">预测长度：</span>
+                            <span class="info-value">120个数据点</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">预测温度：</span>
+                            <span class="info-value">1.0</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">核心采样：</span>
+                            <span class="info-value">0.9</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">样本数量：</span>
+                            <span class="info-value">1</span>
                         </div>
                     </div>
-                    
-                    <small class="form-text">拖动滑块选择520个数据点的时间窗口位置，绿色区域表示固定的400+120数据点范围</small>
-                </div>
-
-                <!-- Prediction Parameters -->
-                <div class="form-group">
-                    <label for="lookback">回看窗口大小：</label>
-                    <input type="number" id="lookback" value="100" readonly>
-                    <small class="form-text">固定为100个数据点（优化性能）</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="pred-len">预测长度：</label>
-                    <input type="number" id="pred-len" value="30" readonly>
-                    <small class="form-text">固定为30个数据点（优化性能）</small>
-                </div>
-
-                <!-- Prediction Quality Parameters -->
-                <div class="form-group">
-                    <label for="temperature">预测温度 (T)：</label>
-                    <input type="range" id="temperature" value="1.3" min="0.1" max="2.0" step="0.1">
-                    <span id="temperature-value">1.3</span>
-                    <small class="form-text">控制预测随机性，较高值使预测更多样化，较低值使预测更保守（推荐值：1.2-1.5）</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="top-p">核心采样参数 (top_p)：</label>
-                    <input type="range" id="top-p" value="0.98" min="0.1" max="1.0" step="0.1">
-                    <span id="top-p-value">0.98</span>
-                    <small class="form-text">控制预测多样性，较高值考虑更广泛的概率分布（推荐值：0.95-1.0）</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="sample-count">样本数量：</label>
-                    <input type="number" id="sample-count" value="2" min="1" max="5" step="1">
-                    <small class="form-text">生成多个预测样本以提高质量（推荐值：2-3个）</small>
+                    <small class="form-text">使用系统推荐的默认参数设置，确保最佳预测效果</small>
                 </div>
 
                 <button id="predict-btn" class="btn btn-success" disabled>
@@ -1277,9 +1181,6 @@
             
             // Set up event listeners
             setupEventListeners();
-            
-            // Initialize time slider
-            initializeTimeSlider();
             
             // Start automatic model status monitoring
             startModelStatusMonitoring();
@@ -1529,226 +1430,8 @@
             updateElementText('data-timeframe', dataInfo.timeframe || 'daily');
             updateElementText('data-prediction-cols', dataInfo.prediction_columns ? dataInfo.prediction_columns.join(', ') : 'close');
             
-            // Initialize time window slider
-            initializeTimeWindowSlider(dataInfo);
-        }
-
-                    // Time window slider related variables
-        let sliderData = null;
-        let isDragging = false;
-        let currentHandle = null;
-
-        // Initialize time window slider
-        function initializeTimeSlider() {
-            // Set up slider event listeners
-            setupSliderEventListeners();
-        }
-
-        // Set up slider event listeners
-        function setupSliderEventListeners() {
-            const startHandle = document.getElementById('start-handle');
-            const endHandle = document.getElementById('end-handle');
-            const track = document.querySelector('.slider-track');
-            
-            if (!startHandle || !endHandle || !track) return;
-            
-            // Start dragging
-            startHandle.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                currentHandle = 'start';
-                e.preventDefault();
-            });
-            
-            endHandle.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                currentHandle = 'end';
-                e.preventDefault();
-            });
-            
-            // Dragging
-            document.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                
-                const rect = track.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const percentage = Math.max(0, Math.min(1, x / rect.width));
-                
-                if (currentHandle === 'start') {
-                    updateStartHandle(percentage);
-                } else if (currentHandle === 'end') {
-                    updateEndHandle(percentage);
-                }
-                
-                updateSliderFromHandles();
-            });
-            
-            // End dragging
-            document.addEventListener('mouseup', () => {
-                isDragging = false;
-                currentHandle = null;
-            });
-            
-            // Click track to set position directly
-            track.addEventListener('click', (e) => {
-                const rect = track.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const percentage = Math.max(0, Math.min(1, x / rect.width));
-                
-                // Determine which handle is closer to the click position
-                const startHandle = document.getElementById('start-handle');
-                const endHandle = document.getElementById('end-handle');
-                
-                if (!startHandle || !endHandle) return;
-                
-                const startRect = startHandle.getBoundingClientRect();
-                const endRect = endHandle.getBoundingClientRect();
-                
-                if (Math.abs(x - (startRect.left - rect.left)) < Math.abs(x - (endRect.left - rect.left))) {
-                    updateStartHandle(percentage);
-                } else {
-                    updateEndHandle(percentage);
-                }
-                
-                updateSliderFromHandles();
-            });
-        }
-
-        // Update start handle position
-        function updateStartHandle(percentage) {
-            const startHandle = document.getElementById('start-handle');
-            const selection = document.getElementById('slider-selection');
-            const endHandle = document.getElementById('end-handle');
-            
-            if (!startHandle || !selection || !endHandle) return;
-            
-            // Fixed window size of 520 data points
-            const windowSize = 520;
-            const totalRows = sliderData ? sliderData.totalRows : 1000;
-            const windowPercentage = windowSize / totalRows;
-            
-            // Ensure start handle doesn't cause window to exceed data range
-            if (percentage + windowPercentage > 1) {
-                percentage = 1 - windowPercentage;
-            }
-            
-            startHandle.style.left = (percentage * 100) + '%';
-            selection.style.left = (percentage * 100) + '%';
-            selection.style.width = (windowPercentage * 100) + '%';
-            
-            // Automatically adjust end handle position to maintain fixed window size
-            endHandle.style.left = ((percentage + windowPercentage) * 100) + '%';
-        }
-
-        // Update end handle position
-        function updateEndHandle(percentage) {
-            const endHandle = document.getElementById('end-handle');
-            const selection = document.getElementById('slider-selection');
-            const startHandle = document.getElementById('start-handle');
-            
-            if (!endHandle || !selection || !startHandle) return;
-            
-            // Fixed window size of 520 data points
-            const windowSize = 520;
-            const totalRows = sliderData ? sliderData.totalRows : 1000;
-            const windowPercentage = windowSize / totalRows;
-            
-            // Ensure end handle doesn't cause window to exceed data range
-            if (percentage - windowPercentage < 0) {
-                percentage = windowPercentage;
-            }
-            
-            endHandle.style.left = (percentage * 100) + '%';
-            selection.style.left = ((percentage - windowPercentage) * 100) + '%';
-            selection.style.width = (windowPercentage * 100) + '%';
-            
-            // Automatically adjust start handle position to maintain fixed window size
-            startHandle.style.left = ((percentage - windowPercentage) * 100) + '%';
-        }
-
-        // Update slider display based on handle positions
-        function updateSliderFromHandles() {
-            const startHandle = document.getElementById('start-handle');
-            const endHandle = document.getElementById('end-handle');
-            
-            if (!startHandle || !endHandle || !sliderData) return;
-            
-            const startPercentage = parseFloat(startHandle.style.left) / 100;
-            const endPercentage = parseFloat(endHandle.style.left) / 100;
-            
-            // Calculate selected time range
-            const totalTime = sliderData.endDate.getTime() - sliderData.startDate.getTime();
-            const startTime = sliderData.startDate.getTime() + (totalTime * startPercentage);
-            const endTime = sliderData.startDate.getTime() + (totalTime * endPercentage);
-            
-            const startDate = new Date(startTime);
-            const endDate = new Date(endTime);
-            
-            // Update display information with DOM safety check
-            const windowStart = document.getElementById('window-start');
-            const windowEnd = document.getElementById('window-end');
-            const windowSize = document.getElementById('window-size');
-            const lookbackInput = document.getElementById('lookback');
-            const predLenInput = document.getElementById('pred-len');
-            
-            if (windowStart) windowStart.textContent = `开始时间: ${startDate.toLocaleDateString()}`;
-            if (windowEnd) windowEnd.textContent = `结束时间: ${endDate.toLocaleDateString()}`;
-            if (windowSize) windowSize.textContent = `窗口大小: 100 + 30 = 130 个数据点 (固定)`;
-            if (lookbackInput) lookbackInput.value = 100;
-            if (predLenInput) predLenInput.value = 30;
-        }
-
-        // Update slider based on input fields
-        function updateSliderFromInputs() {
-            if (!sliderData) return;
-            
-            // Fixed window size: 400 + 120 = 520 data points
-            const lookback = 400;
-            const predLen = 120;
-            const windowSize = lookback + predLen; // Fixed at 520
-            
-            // Calculate slider position
-            const totalRows = sliderData.totalRows;
-            
-            if (windowSize > totalRows) {
-                // If window size exceeds total data amount, show error
-                showStatus('error', `数据不足，需要至少 ${windowSize} 个数据点，当前只有 ${totalRows} 个可用`);
-                return;
-            }
-            
-            // Calculate slider position (default select first half of data)
-            const startPercentage = 0.1; // Start from 10%
-            const endPercentage = startPercentage + (windowSize / totalRows);
-            
-            // Update handle positions
-            updateStartHandle(startPercentage);
-            updateEndHandle(endPercentage);
-            
-            // Update display information
-            updateSliderFromHandles();
-        }
-
-        // Initialize time window slider
-        function initializeTimeWindowSlider(dataInfo) {
-            sliderData = {
-                startDate: new Date(dataInfo.start_date),
-                endDate: new Date(dataInfo.end_date),
-                totalRows: dataInfo.rows,
-                timeframe: dataInfo.timeframe
-            };
-            
-            // Set slider labels with DOM safety check
-            const minLabel = document.getElementById('min-label');
-            const maxLabel = document.getElementById('max-label');
-            
-            if (minLabel) {
-                minLabel.textContent = dataInfo.start_date.split('T')[0];
-            }
-            if (maxLabel) {
-                maxLabel.textContent = dataInfo.end_date.split('T')[0];
-            }
-            
-            // Initialize slider position
-            updateSliderFromInputs();
+            // 时间窗口滑块已移除，使用默认参数
+            console.log('时间窗口滑块已移除，使用默认参数：lookback=400, pred_len=120');
         }
 
         // 安全获取参数值，避免null值错误
@@ -1795,50 +1478,36 @@
                 
                 console.log('✅ 状态检查通过，开始预测...');
                 
-                const lookback = parseInt(getParamValue('lookback', '100'));
-                const predLen = parseInt(getParamValue('pred-len', '30'));
-                
-                // Get selected time range from time window slider
-                const startHandle = document.getElementById('start-handle');
-                if (!startHandle) {
-                    showStatus('error', '时间窗口滑块未找到');
-                    return;
-                }
-                const startLeft = startHandle.style.left || '0%';
-                const startPercentage = parseFloat(startLeft) / 100;
-                
-                if (!sliderData) {
-                    showStatus('error', '时间窗口滑块未初始化');
-                    return;
-                }
-                
-                // Calculate selected time range
-                const totalTime = sliderData.endDate.getTime() - sliderData.startDate.getTime();
-                const startTime = sliderData.startDate.getTime() + (totalTime * startPercentage);
-                const startDate = new Date(startTime);
+                // 使用后端默认参数
+                const lookback = 30; // 减少lookback值，避免数据不足
+                const predLen = 5;  // 减少预测长度
                 
                 // Check if trading calendar mode is enabled
                 const tradingMode = getParamValue('trading-mode', 'calendar');
+                
+                // Get prediction start date from input field
+                let startDate = getParamValue('prediction-start-date', '');
                 
                 let predictionParams = {
                     file_path: `stock_${stockCode}_live`, // 使用akshare实时数据格式
                     lookback: lookback,
                     pred_len: predLen,
-                    start_date: startDate.toISOString().slice(0, 19), // Format as YYYY-MM-DDTHH:MM:SS
-                    temperature: parseFloat(getParamValue('temperature', '1.3')),
-                    top_p: parseFloat(getParamValue('top-p', '0.98')),
-                    sample_count: parseInt(getParamValue('sample-count', '2'))
+                    temperature: 1.0, // 使用后端默认值
+                    top_p: 0.9, // 使用后端默认值
+                    sample_count: 1 // 使用后端默认值
                 };
+                
+                // Add start_date parameter if specified
+                if (startDate) {
+                    predictionParams.start_date = startDate;
+                    console.log('📅 使用用户指定的数据起始日期:', startDate);
+                } else {
+                    console.log('📅 使用后端默认数据起始日期（最新数据）');
+                }
                 
                 // Add trading calendar parameters if enabled
                 if (tradingMode !== 'calendar') {
                     predictionParams.trading_mode = tradingMode;
-                    
-                    // Use trading calendar start date if specified
-                    const calendarStartDate = getParamValue('prediction-start-date', null);
-                    if (calendarStartDate) {
-                        predictionParams.start_date = calendarStartDate + 'T00:00';
-                    }
                 }
                 
                 console.log('🚀 开始预测，参数:', predictionParams);
@@ -2073,7 +1742,7 @@
         // Trading calendar functions
         function loadTradingCalendar() {
             const mode = getParamValue('trading-mode', 'calendar');
-            const startDate = getParamValue('prediction-start-date', '');
+            const startDate = getNextBusinessDay().toISOString().split('T')[0]; // 使用默认日期计算
             
             if (!startDate) {
                 showStatus('error', '请选择预测起始日期');
@@ -2306,6 +1975,11 @@
             initializeTimeWindowSlider(dataInfo);
         }
 
+        function initializeTimeWindowSlider(dataInfo) {
+            // Time window slider has been removed
+            console.log('Time window slider initialization is disabled');
+        }
+
         function loadStockData(code, name) {
             showLoading(true);
             
@@ -2422,6 +2096,20 @@
                 });
         }
 
+        // Function to get next business day (Monday-Friday)
+        function getNextBusinessDay(startDate = new Date()) {
+            const date = new Date(startDate);
+            
+            // If it's Saturday (6) or Sunday (0), move to next Monday
+            if (date.getDay() === 6) { // Saturday
+                date.setDate(date.getDate() + 2);
+            } else if (date.getDay() === 0) { // Sunday
+                date.setDate(date.getDate() + 1);
+            }
+            
+            return date;
+        }
+
         // Set up event listeners
         function setupEventListeners() {
             // Load data button
@@ -2452,9 +2140,10 @@
                 document.getElementById('top-p-value').textContent = this.value;
             });
             
-            // Update slider when lookback window size changes
-            document.getElementById('lookback').addEventListener('input', updateSliderFromInputs);
-            document.getElementById('pred-len').addEventListener('input', updateSliderFromInputs);
+            // Set default prediction start date to next business day (no input element needed)
+            const nextBusinessDay = getNextBusinessDay();
+            const formattedDate = nextBusinessDay.toISOString().split('T')[0];
+            console.log('📅 默认预测起始日期为下一个工作日:', formattedDate);
         }
 
         // Auto check model status on page load

@@ -1029,11 +1029,7 @@
                             <small class="form-text">选择预测时间轴是否考虑交易日历</small>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="prediction-start-date">预测起始日期：</label>
-                            <input type="date" id="prediction-start-date" class="form-control" value="">
-                            <small class="form-text">设置预测的起始日期（自动识别下一个交易日）</small>
-                        </div>
+
                         
                         <button id="load-calendar-btn" class="btn btn-outline-secondary">
                             📅 加载交易日历
@@ -1492,13 +1488,9 @@
                 // Check if trading calendar mode is enabled
                 const tradingMode = getParamValue('trading-mode', 'calendar');
                 
-                // Get prediction start date from input field
-                let startDate = getParamValue('prediction-start-date', '');
-                // Note: Allow empty start date to use latest data, don't require it
-                // 如果日期为空或为null/undefined字符串，设置为null，后端会使用最新数据
-                if (!startDate || startDate === 'null' || startDate === 'undefined' || startDate === '""' || startDate.trim() === '') {
-                    startDate = null;
-                }
+                // Get default prediction start date (no input field needed)
+                let startDate = null; // 使用默认日期计算，不需要用户输入
+                console.log('📅 使用默认预测起始日期计算');
                 
                 // 检查currentDataFile是否已正确设置
                 if (!currentDataFile) {
@@ -1776,12 +1768,9 @@
         // Trading calendar functions
         function loadTradingCalendar() {
             const mode = getParamValue('trading-mode', 'calendar');
-            const startDate = getParamValue('prediction-start-date', '');
+            const startDate = getNextBusinessDay().toISOString().split('T')[0]; // 使用默认日期计算
             
-            if (!startDate) {
-                showStatus('error', '请选择预测起始日期');
-                return;
-            }
+            console.log('📅 交易日历使用默认起始日期:', startDate);
             
             showLoading(true);
             
@@ -2125,6 +2114,20 @@
                 });
         }
 
+        // Function to get next business day (Monday-Friday)
+        function getNextBusinessDay(startDate = new Date()) {
+            const date = new Date(startDate);
+            
+            // If it's Saturday (6) or Sunday (0), move to next Monday
+            if (date.getDay() === 6) { // Saturday
+                date.setDate(date.getDate() + 2);
+            } else if (date.getDay() === 0) { // Sunday
+                date.setDate(date.getDate() + 1);
+            }
+            
+            return date;
+        }
+
         // Set up event listeners
         function setupEventListeners() {
             // Load data button
@@ -2155,13 +2158,17 @@
                 document.getElementById('top-p-value').textContent = this.value;
             });
             
-            // Set default value for prediction start date to today
-            const predictionStartDateInput = document.getElementById('prediction-start-date');
-            if (predictionStartDateInput) {
-                const today = new Date();
-                const formattedDate = today.toISOString().split('T')[0];
-                predictionStartDateInput.value = formattedDate;
-            }
+            // Set default prediction start date to next business day (no input element needed)
+            const nextBusinessDay = getNextBusinessDay();
+            const formattedDate = nextBusinessDay.toISOString().split('T')[0];
+            console.log('📅 默认预测起始日期为下一个工作日:', formattedDate);
+        }
+
+        // Update slider based on input fields
+        function updateSliderFromInputs() {
+            // For index.html, this function is not needed as there's no time window slider
+            // But we need to define it to prevent "undefined function" errors
+            console.log('updateSliderFromInputs called - no time window slider in index.html');
         }
 
         // Auto check model status on page load

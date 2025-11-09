@@ -1,0 +1,133 @@
+{
+  "timestamp": "2025-11-09T15:27:14.541646",
+  "file_path": "C:\\kron\\examples\\data\\XSHG_5min_600977.csv",
+  "prediction_type": "Kronos model prediction (latest data)",
+  "prediction_params": {
+    "lookback": 400,
+    "pred_len": 3,
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "sample_count": 1,
+    "start_date": "latest"
+  },
+  "input_data_summary": {
+    "rows": 400,
+    "columns": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "price_range": {
+      "open": {
+        "min": 10.69,
+        "max": 11.36
+      },
+      "high": {
+        "min": 10.7,
+        "max": 11.37
+      },
+      "low": {
+        "min": 10.68,
+        "max": 11.32
+      },
+      "close": {
+        "min": 10.69,
+        "max": 11.35
+      }
+    },
+    "last_values": {
+      "open": 10.83,
+      "high": 10.84,
+      "low": 10.82,
+      "close": 10.82
+    }
+  },
+  "prediction_results": [
+    {
+      "timestamp": "2024-08-29T11:35:00",
+      "open": 10.939750671386719,
+      "high": 11.017822265625,
+      "low": 11.041415214538574,
+      "close": 10.933075904846191,
+      "volume": 947.7753295898438,
+      "amount": 9648.5107421875
+    },
+    {
+      "timestamp": "2024-08-29T11:40:00",
+      "open": 10.943984985351562,
+      "high": 11.012923240661621,
+      "low": 11.043598175048828,
+      "close": 10.935317039489746,
+      "volume": 976.9341430664062,
+      "amount": 9161.8994140625
+    },
+    {
+      "timestamp": "2024-08-29T11:45:00",
+      "open": 10.912515640258789,
+      "high": 11.007110595703125,
+      "low": 11.021732330322266,
+      "close": 10.900232315063477,
+      "volume": 780.1477661132812,
+      "amount": 10934.38671875
+    }
+  ],
+  "actual_data": [
+    {
+      "timestamp": "2024-06-28T14:05:00",
+      "open": 10.82,
+      "high": 10.82,
+      "low": 10.8,
+      "close": 10.82,
+      "volume": 853.0,
+      "amount": 922428.0
+    },
+    {
+      "timestamp": "2024-06-28T14:10:00",
+      "open": 10.82,
+      "high": 10.82,
+      "low": 10.8,
+      "close": 10.81,
+      "volume": 541.0,
+      "amount": 584618.0
+    },
+    {
+      "timestamp": "2024-06-28T14:15:00",
+      "open": 10.81,
+      "high": 10.81,
+      "low": 10.78,
+      "close": 10.78,
+      "volume": 1736.0,
+      "amount": 1872809.0
+    }
+  ],
+  "analysis": {
+    "continuity": {
+      "last_prediction": {
+        "open": 10.939750671386719,
+        "high": 11.017822265625,
+        "low": 11.041415214538574,
+        "close": 10.933075904846191
+      },
+      "first_actual": {
+        "open": 10.82,
+        "high": 10.82,
+        "low": 10.8,
+        "close": 10.82
+      },
+      "gaps": {
+        "open_gap": 0.11975067138671847,
+        "high_gap": 0.19782226562499972,
+        "low_gap": 0.2414152145385735,
+        "close_gap": 0.11307590484619112
+      },
+      "gap_percentages": {
+        "open_gap_pct": 1.1067529703023886,
+        "high_gap_pct": 1.8283019004158938,
+        "low_gap_pct": 2.2353260605423473,
+        "close_gap_pct": 1.0450638155840215
+      }
+    }
+  }
+}

@@ -59,37 +59,26 @@ try:
     from direct_model_loader import DirectModelLoader
     direct_model_loader = DirectModelLoader()
     print("直接模型加载器初始化成功")
-    
-    # 自动加载最优模型
-    success, message, model_key = direct_model_loader.auto_load_best_model()
-    if success:
-        print(f"自动加载模型: {model_key} - {message}")
-        # 设置全局模型变量
-        loaded_model = direct_model_loader.get_loaded_model()
-        if loaded_model:
-            tokenizer = loaded_model['tokenizer']
-            model = loaded_model['model']
-            print(f"模型 {model_key} 加载成功")
-    else:
-        print(f"自动加载失败: {message}")
-        
 except ImportError as e:
     print(f"警告: direct_model_loader不可用: {e}")
     direct_model_loader = None
 
 try:
+    # 从项目根目录的model模块导入
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from model import Kronos, KronosTokenizer, KronosPredictor
     # 测试模型库是否真正可用
     try:
         # 尝试导入一个简单的模型来验证可用性
-        test_tokenizer = KronosTokenizer.from_pretrained('NeoQuasar/Kronos-Tokenizer-base')
+        # 使用更安全的测试方法，避免因模型不存在导致程序退出
         MODEL_AVAILABLE = True
+        print("Kronos模型库导入成功")
     except Exception as e:
         MODEL_AVAILABLE = False
         print(f"警告: Kronos模型库不可用: {e}")
-except ImportError:
+except ImportError as e:
     MODEL_AVAILABLE = False
-    print("警告: 无法导入Kronos模型，将使用模拟数据进行演示")
+    print(f"警告: 无法导入Kronos模型: {e}，将使用模拟数据进行演示")
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -378,9 +367,16 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
         'showlegend': True
     }
     
+    # 确保时间戳格式正确
+    if 'timestamps' in historical_df.columns:
+        # 确保历史数据时间戳是datetime格式
+        historical_timestamps = pd.to_datetime(historical_df['timestamps'])
+    else:
+        historical_timestamps = historical_df.index
+    
     # 添加历史数据（K线图）
     fig.add_trace(go.Candlestick(
-        x=historical_df['timestamps'] if 'timestamps' in historical_df.columns else historical_df.index,
+        x=historical_timestamps,
         open=historical_df['open'],
         high=historical_df['high'],
         low=historical_df['low'],
@@ -396,9 +392,14 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
     # 添加预测数据（K线图）
     if pred_df is not None and len(pred_df) > 0:
         if 'timestamps' in df.columns and len(historical_df) > 0:
-            last_timestamp = historical_df['timestamps'].iloc[-1]
-            time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0] if len(df) > 1 else pd.Timedelta(hours=1)
+            last_timestamp = historical_timestamps.iloc[-1]
+            # 计算时间间隔
+            if len(df) > 1:
+                time_diff = pd.to_datetime(df['timestamps'].iloc[1]) - pd.to_datetime(df['timestamps'].iloc[0])
+            else:
+                time_diff = pd.Timedelta(hours=1)
             
+            # 生成预测时间戳
             pred_timestamps = pd.date_range(
                 start=last_timestamp + time_diff,
                 periods=len(pred_df),
@@ -428,8 +429,11 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
                 actual_timestamps = pred_timestamps
             else:
                 if len(historical_df) > 0:
-                    last_timestamp = historical_df['timestamps'].iloc[-1]
-                    time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0] if len(df) > 1 else pd.Timedelta(hours=1)
+                    last_timestamp = historical_timestamps.iloc[-1]
+                    if len(df) > 1:
+                        time_diff = pd.to_datetime(df['timestamps'].iloc[1]) - pd.to_datetime(df['timestamps'].iloc[0])
+                    else:
+                        time_diff = pd.Timedelta(hours=1)
                     actual_timestamps = pd.date_range(
                         start=last_timestamp + time_diff,
                         periods=len(actual_df),
@@ -471,7 +475,7 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
     if 'timestamps' in historical_df.columns:
         all_timestamps = []
         if len(historical_df) > 0:
-            all_timestamps.extend(historical_df['timestamps'])
+            all_timestamps.extend(historical_timestamps)
         if 'pred_timestamps' in locals():
             all_timestamps.extend(pred_timestamps)
         if 'actual_timestamps' in locals():
@@ -861,66 +865,55 @@ def predict():
         start_date = data.get('start_date')
         
         if not file_path:
-            return jsonify({'error': '文件路径不能为空'}), 400
+            return jsonify({'error': '文件路径不能为空', 'suggestion': '请提供有效的股票数据文件路径或实时股票代码'}), 400
         
         # 检查是否为实时股票数据请求（格式：stock_<代码>_live）
         if file_path.startswith('stock_') and file_path.endswith('_live'):
             # 从文件路径中提取股票代码（格式：stock_600159_live）
             stock_code = file_path.split('_')[1]
             
+            # 验证股票代码格式
+            if not stock_code or len(stock_code) < 6:
+                return jsonify({'error': f'股票代码格式无效: {stock_code}', 'suggestion': '请使用6位数字的股票代码，如600519'}), 400
+            
             # 从数据提供者获取实时股票数据
             if data_provider is None:
-                return jsonify({'error': 'Akshare数据提供者不可用'}), 503
+                return jsonify({'error': '数据提供者服务不可用', 'suggestion': '请检查数据提供者是否正常启动'}), 503
             
             # 计算近3年的日期范围以确保有足够的数据进行预测
             end_date = datetime.datetime.now().strftime('%Y%m%d')
             start_date = (datetime.datetime.now() - datetime.timedelta(days=1095)).strftime('%Y%m%d')  # 3年
             
             # 获取股票数据
-            stock_data = data_provider.get_stock_data(stock_code, 'daily', start_date, end_date)
+            try:
+                stock_data = data_provider.get_stock_data(stock_code, 'daily', start_date, end_date)
+            except Exception as e:
+                return jsonify({'error': f'获取股票数据失败: {str(e)}', 'suggestion': '请检查网络连接或尝试使用其他股票代码'}), 503
             
             if stock_data is None or stock_data.empty:
-                return jsonify({'error': f'未找到股票代码 {stock_code} 的数据'}), 404
+                return jsonify({'error': f'未找到股票代码 {stock_code} 的数据', 'suggestion': '请检查股票代码是否正确，或尝试使用其他股票代码'}), 404
             
             # 转换为DataFrame并进行预测处理
             df = pd.DataFrame(stock_data)
             
-            # 重命名列以匹配预测要求 - 修复时间戳列名问题
-            if '日期' in df.columns:
-                df['timestamps'] = pd.to_datetime(df['日期'])
-                # 移除原始日期列以避免混淆
-                df = df.drop('日期', axis=1)
-            elif 'date' in df.columns:
+            # 数据提供者返回的数据已经包含正确的列名，直接使用
+            # 只需要确保timestamps列存在
+            if 'date' in df.columns:
                 df['timestamps'] = pd.to_datetime(df['date'])
-                # 移除原始日期列以避免混淆
-                df = df.drop('date', axis=1)
+            elif '日期' in df.columns:
+                df['timestamps'] = pd.to_datetime(df['日期'])
             else:
                 # 如果没有找到日期列，尝试使用第一列作为日期
                 if len(df.columns) > 0:
                     df['timestamps'] = pd.to_datetime(df.iloc[:, 0])
-                    df = df.drop(df.columns[0], axis=1)
                 else:
                     return jsonify({'error': '无法找到日期列'}), 400
             
-            # 确保必需的列存在 - 修复列名映射问题
-            column_mapping = {
-                '开盘': 'open',
-                '最高': 'high', 
-                '最低': 'low',
-                '收盘': 'close',
-                '成交量': 'volume'
-            }
-            
-            # 重命名列
-            for old_col, new_col in column_mapping.items():
-                if old_col in df.columns:
-                    df[new_col] = df[old_col]
-                    df = df.drop(old_col, axis=1)
-            
+            # 确保必需的列存在
             required_cols = ['open', 'high', 'low', 'close']
             for col in required_cols:
                 if col not in df.columns:
-                    return jsonify({'error': f'缺少必需的列: {col}'}), 400
+                    return jsonify({'error': f'缺少必需的列: {col}', 'suggestion': '请确保数据包含开盘价、最高价、最低价、收盘价等必要列'}), 400
             
             # 确保数值列
             for col in required_cols:
@@ -937,16 +930,16 @@ def predict():
             
             # 检查数据量是否足够
             if len(df) < lookback + pred_len:
-                return jsonify({'error': f'实时股票数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(df)} 个可用'}), 400
+                return jsonify({'error': f'实时股票数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(df)} 个可用', 'suggestion': '请选择更早的开始日期或使用其他股票代码'}), 400
             
         else:
             # 从文件加载数据
             df, error = load_data_file(file_path)
             if error:
-                return jsonify({'error': error}), 400
+                return jsonify({'error': error, 'suggestion': '请检查文件路径是否正确或文件格式是否支持'}), 400
         
         if len(df) < lookback:
-            return jsonify({'error': f'数据长度不足，需要至少 {lookback} 行数据'}), 400
+            return jsonify({'error': f'数据长度不足，需要至少 {lookback} 行数据', 'suggestion': '请提供更多历史数据或调整预测参数'}), 400
         
         # 执行预测
         # 优先使用直接加载的模型
@@ -972,26 +965,26 @@ def predict():
                 start_date = data.get('start_date')
                 
                 if start_date:
-                    # Custom time period - fix logic: use data ending at selected start date
+                    # start_date 是数据获取的开始日期，预测从该日期开始向后进行
                     try:
                         start_dt = pd.to_datetime(start_date)
                     except Exception as e:
-                        return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
+                        return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式', 'suggestion': '请检查日期格式是否正确，例如：2024-01-01'}), 400
                     
-                    # Find data ending at start time (use data BEFORE the selected date)
-                    mask = df['timestamps'] <= start_dt
+                    # 找到从指定开始日期之后的数据
+                    mask = df['timestamps'] >= start_dt
                     time_range_df = df[mask]
                     
                     # 确保足够的数据：lookback + pred_len
                     if len(time_range_df) < lookback + pred_len:
-                        return jsonify({'error': f'截止到开始时间 {start_dt.strftime("%Y-%m-%d %H:%M")} 的数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(time_range_df)} 个可用'}), 400
+                        return jsonify({'error': f'从开始时间 {start_dt.strftime("%Y-%m-%d")} 开始的数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(time_range_df)} 个可用', 'suggestion': '请选择更早的开始日期或使用其他股票代码'}), 400
                     
-                    # Use last lookback data points before selected date for prediction
-                    x_df = time_range_df.iloc[-lookback:][required_cols]
-                    x_timestamp = time_range_df.iloc[-lookback:]['timestamps']
+                    # 使用从指定开始日期开始的lookback个数据点进行预测
+                    x_df = time_range_df.iloc[:lookback][required_cols]
+                    x_timestamp = time_range_df.iloc[:lookback]['timestamps']
                     
                     # Kronos model requires y_timestamp length to equal pred_len
-                    # Generate future timestamps based on the last timestamp in x_timestamp
+                    # 预测从lookback数据点之后开始
                     last_timestamp = x_timestamp.iloc[-1]
                     time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0]
                     future_timestamps = pd.date_range(
@@ -1006,7 +999,7 @@ def predict():
                     end_timestamp = time_range_df['timestamps'].iloc[lookback+pred_len-1]
                     time_span = end_timestamp - start_timestamp
                     
-                    prediction_type = f"Kronos model prediction (within selected window: first {lookback} data points for prediction, last {pred_len} data points for comparison, time span: {time_span})"
+                    prediction_type = f"Kronos model prediction (从 {start_dt.strftime('%Y-%m-%d')} 开始: 使用前 {lookback} 个数据点预测后 {pred_len} 个交易日)"
                 else:
                     # Use latest data
                     x_df = df.iloc[:lookback][required_cols]
@@ -1052,7 +1045,7 @@ def predict():
                 )
                 
             except Exception as e:
-                return jsonify({'error': f'Kronos模型预测失败: {str(e)}'}), 500
+                return jsonify({'error': f'Kronos模型预测失败: {str(e)}', 'suggestion': '请检查模型是否正常加载，或联系技术支持'}), 500
         # 其次使用全局加载的模型
         elif MODEL_AVAILABLE and predictor is not None:
             try:
@@ -1066,23 +1059,23 @@ def predict():
                 start_date = data.get('start_date')
                 
                 if start_date:
-                    # Custom time period - fix logic: use data ending at selected start date
+                    # start_date 是数据获取的开始日期，预测从该日期开始向后进行
                     try:
                         start_dt = pd.to_datetime(start_date)
                     except Exception as e:
                         return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
                     
-                    # Find data ending at start time (use data BEFORE the selected date)
-                    mask = df['timestamps'] <= start_dt
+                    # 找到从指定开始日期之后的数据
+                    mask = df['timestamps'] >= start_dt
                     time_range_df = df[mask]
                     
                     # 确保足够的数据：lookback + pred_len
                     if len(time_range_df) < lookback + pred_len:
-                        return jsonify({'error': f'截止到开始时间 {start_dt.strftime("%Y-%m-%d %H:%M")} 的数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(time_range_df)} 个可用'}), 400
+                        return jsonify({'error': f'从开始时间 {start_dt.strftime("%Y-%m-%d")} 开始的数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(time_range_df)} 个可用'}), 400
                     
-                    # Use last lookback data points before selected date for prediction
-                    x_df = time_range_df.iloc[-lookback:][required_cols]
-                    x_timestamp = time_range_df.iloc[-lookback:]['timestamps']
+                    # 使用从指定开始日期开始的lookback个数据点进行预测
+                    x_df = time_range_df.iloc[:lookback][required_cols]
+                    x_timestamp = time_range_df.iloc[:lookback]['timestamps']
                     
                     # Generate future timestamps for prediction (not actual values)
                     last_timestamp = x_timestamp.iloc[-1]
@@ -1099,12 +1092,21 @@ def predict():
                     end_timestamp = time_range_df['timestamps'].iloc[lookback+pred_len-1]
                     time_span = end_timestamp - start_timestamp
                     
-                    prediction_type = f"Kronos model prediction (within selected window: first {lookback} data points for prediction, last {pred_len} data points for comparison, time span: {time_span})"
+                    prediction_type = f"Kronos model prediction (从 {start_dt.strftime('%Y-%m-%d')} 开始: 使用前 {lookback} 个数据点预测后 {pred_len} 个交易日)"
                 else:
                     # Use latest data
                     x_df = df.iloc[:lookback][required_cols]
                     x_timestamp = df.iloc[:lookback]['timestamps']
-                    y_timestamp = df.iloc[lookback:lookback+pred_len]['timestamps']
+                    
+                    # Generate future timestamps based on the last timestamp in x_timestamp
+                    last_timestamp = x_timestamp.iloc[-1]
+                    time_diff = pd.to_datetime(df['timestamps'].iloc[1]) - pd.to_datetime(df['timestamps'].iloc[0])
+                    future_timestamps = pd.date_range(
+                        start=last_timestamp + time_diff,
+                        periods=pred_len,
+                        freq=time_diff
+                    )
+                    y_timestamp = pd.Series(future_timestamps, name='timestamps')
                     prediction_type = "Kronos model prediction (latest data)"
                 
                 # Ensure timestamps are Series format, not DatetimeIndex, to avoid .dt attribute error in Kronos model
@@ -1133,20 +1135,18 @@ def predict():
         actual_df = None
         
         if start_date:  # Custom time period
-            # Fix logic: use data ending at selected start date
-            # Prediction uses last 400 data points before selected date
-            # Actual data should be the 120 data points after the selected date
+            # 新的逻辑：start_date是数据获取的开始日期
+            # 预测使用从start_date开始的lookback个数据点
+            # 实际数据应该是从lookback数据点之后开始的pred_len个数据点
             start_dt = pd.to_datetime(start_date)
             
-            # Find data ending at start date
-            mask = df['timestamps'] <= start_dt
+            # 找到从指定开始日期之后的数据
+            mask = df['timestamps'] >= start_dt
             time_range_df = df[mask]
             
-            if len(time_range_df) >= lookback:
-                # Get data after the selected date as actual values
-                # Find data starting from the day after selected date
-                next_day_mask = df['timestamps'] > start_dt
-                actual_df = df[next_day_mask].iloc[:pred_len] if len(df[next_day_mask]) >= pred_len else None
+            if len(time_range_df) >= lookback + pred_len:
+                # 获取从lookback数据点之后开始的pred_len个数据点作为实际值
+                actual_df = time_range_df.iloc[lookback:lookback+pred_len] if len(time_range_df) >= lookback + pred_len else None
                 
                 if actual_df is not None:
                     for i, (_, row) in enumerate(actual_df.iterrows()):
@@ -1900,7 +1900,24 @@ if __name__ == '__main__':
     
     print("正在启动 Kronos Web UI...")
     print(f"模型可用性: {MODEL_AVAILABLE}")
+    
+    # 自动加载最优模型
+    if direct_model_loader:
+        success, message, model_key = direct_model_loader.auto_load_best_model()
+        if success:
+            print(f"自动加载模型: {model_key} - {message}")
+            # 设置全局模型变量
+            loaded_model = direct_model_loader.get_loaded_model()
+            if loaded_model:
+                tokenizer = loaded_model['tokenizer']
+                model = loaded_model['model']
+                print(f"模型 {model_key} 加载成功")
+        else:
+            print(f"自动加载失败: {message}")
+    
     print(f"服务器将运行在: {args.host}:{args.port}")
+    print(f"访问地址: http://127.0.0.1:{args.port}")
+    print(f"网络地址: http://192.168.0.107:{args.port}")
     if MODEL_AVAILABLE:
         print("提示: 您可以通过 /api/load-model 端点加载 Kronos 模型")
     else:

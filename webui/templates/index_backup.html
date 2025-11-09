@@ -2161,6 +2161,20 @@
                 });
         }
 
+        // Function to get next business day (Monday-Friday)
+        function getNextBusinessDay(startDate = new Date()) {
+            const date = new Date(startDate);
+            
+            // If it's Saturday (6) or Sunday (0), move to next Monday
+            if (date.getDay() === 6) { // Saturday
+                date.setDate(date.getDate() + 2);
+            } else if (date.getDay() === 0) { // Sunday
+                date.setDate(date.getDate() + 1);
+            }
+            
+            return date;
+        }
+
         // Set up event listeners
         function setupEventListeners() {
             // Load data button
@@ -2191,12 +2205,13 @@
                 document.getElementById('top-p-value').textContent = this.value;
             });
             
-            // Set default value for prediction start date to today
+            // Set default value for prediction start date to next business day
             const predictionStartDateInput = document.getElementById('prediction-start-date');
             if (predictionStartDateInput) {
-                const today = new Date();
-                const formattedDate = today.toISOString().split('T')[0];
+                const nextBusinessDay = getNextBusinessDay();
+                const formattedDate = nextBusinessDay.toISOString().split('T')[0];
                 predictionStartDateInput.value = formattedDate;
+                console.log('设置预测起始日期为下一个工作日:', formattedDate);
             }
         }
 

@@ -1,0 +1,169 @@
+{
+  "timestamp": "2025-11-09T14:25:16.473868",
+  "file_path": "stock_600519_live",
+  "prediction_type": "Kronos model prediction (latest data)",
+  "prediction_params": {
+    "lookback": 30,
+    "pred_len": 5,
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "sample_count": 1,
+    "start_date": "latest"
+  },
+  "input_data_summary": {
+    "rows": 30,
+    "columns": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "price_range": {
+      "open": {
+        "min": 7850.12,
+        "max": 9664.07
+      },
+      "high": {
+        "min": 8056.14,
+        "max": 9719.34
+      },
+      "low": {
+        "min": 7805.65,
+        "max": 9538.45
+      },
+      "close": {
+        "min": 8005.89,
+        "max": 9573.58
+      }
+    },
+    "last_values": {
+      "open": 9257.06,
+      "high": 9332.44,
+      "low": 9225.16,
+      "close": 9332.44
+    }
+  },
+  "prediction_results": [
+    {
+      "timestamp": "2025-11-08T00:00:00",
+      "open": 8884.6259765625,
+      "high": 8919.3671875,
+      "low": 8893.318359375,
+      "close": 8436.126953125,
+      "volume": 36633.03515625,
+      "amount": 386592928.0
+    },
+    {
+      "timestamp": "2025-11-09T00:00:00",
+      "open": 8807.947265625,
+      "high": 8994.79296875,
+      "low": 8934.3564453125,
+      "close": 8443.87890625,
+      "volume": 37362.3203125,
+      "amount": 380696960.0
+    },
+    {
+      "timestamp": "2025-11-10T00:00:00",
+      "open": 8784.1435546875,
+      "high": 8905.33203125,
+      "low": 8945.8515625,
+      "close": 8419.474609375,
+      "volume": 39896.69921875,
+      "amount": 400009952.0
+    },
+    {
+      "timestamp": "2025-11-11T00:00:00",
+      "open": 8819.765625,
+      "high": 8909.3076171875,
+      "low": 8928.7216796875,
+      "close": 8426.0390625,
+      "volume": 37444.66015625,
+      "amount": 396942848.0
+    },
+    {
+      "timestamp": "2025-11-12T00:00:00",
+      "open": 8825.580078125,
+      "high": 8961.552734375,
+      "low": 8847.4091796875,
+      "close": 8378.146484375,
+      "volume": 39747.53125,
+      "amount": 381874560.0
+    }
+  ],
+  "actual_data": [
+    {
+      "timestamp": "2022-12-22T00:00:00",
+      "open": 9421.37,
+      "high": 9553.53,
+      "low": 9362.58,
+      "close": 9478.15,
+      "volume": 23175.0,
+      "amount": 4093861570.0
+    },
+    {
+      "timestamp": "2022-12-23T00:00:00",
+      "open": 9399.77,
+      "high": 9548.5,
+      "low": 9362.58,
+      "close": 9493.23,
+      "volume": 17319.0,
+      "amount": 3063608409.0
+    },
+    {
+      "timestamp": "2022-12-26T00:00:00",
+      "open": 9493.23,
+      "high": 9493.23,
+      "low": 9312.44,
+      "close": 9347.81,
+      "volume": 21384.0,
+      "amount": 3749121030.0
+    },
+    {
+      "timestamp": "2022-12-27T00:00:00",
+      "open": 9437.5,
+      "high": 9483.48,
+      "low": 9374.69,
+      "close": 9412.38,
+      "volume": 17905.0,
+      "amount": 3109270166.0
+    },
+    {
+      "timestamp": "2022-12-28T00:00:00",
+      "open": 9477.1,
+      "high": 9482.73,
+      "low": 9286.81,
+      "close": 9412.38,
+      "volume": 21438.0,
+      "amount": 3699948995.0
+    }
+  ],
+  "analysis": {
+    "continuity": {
+      "last_prediction": {
+        "open": 8884.6259765625,
+        "high": 8919.3671875,
+        "low": 8893.318359375,
+        "close": 8436.126953125
+      },
+      "first_actual": {
+        "open": 9421.37,
+        "high": 9553.53,
+        "low": 9362.58,
+        "close": 9478.15
+      },
+      "gaps": {
+        "open_gap": 536.7440234375008,
+        "high_gap": 634.1628125000007,
+        "low_gap": 469.2616406249999,
+        "close_gap": 1042.0230468749996
+      },
+      "gap_percentages": {
+        "open_gap_pct": 5.697091011577942,
+        "high_gap_pct": 6.637994673173169,
+        "low_gap_pct": 5.012097526803508,
+        "close_gap_pct": 10.993949735707915
+      }
+    }
+  }
+}

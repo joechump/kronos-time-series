@@ -27,7 +27,7 @@ function debugPredictionRequest() {
     
     const lookback = parseInt(getParamValue('lookback', '100'));
     const predLen = parseInt(getParamValue('pred-len', '30'));
-    const startDate = getParamValue('prediction-start-date', '');
+    const startDate = '使用默认日期计算';
     const temperature = parseFloat(getParamValue('temperature', '1.3'));
     const topP = parseFloat(getParamValue('top-p', '0.98'));
     const sampleCount = parseInt(getParamValue('sample-count', '2'));
