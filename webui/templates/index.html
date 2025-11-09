@@ -1488,6 +1488,21 @@
                 // Get prediction start date from input field
                 let startDate = getParamValue('prediction-start-date', '');
                 
+                // Check if startDate is a trading day, if not, adjust to next trading day
+                if (startDate) {
+                    try {
+                        const response = await axios.get(`/api/trading-calendar/check?date=${startDate}`);
+                        if (!response.data.is_trading_day) {
+                            console.log(`📅 ${startDate} 是非交易日，自动调整为下一个交易日`);
+                            const nextTradingDay = await getNextBusinessDay(startDate);
+                            startDate = nextTradingDay.toISOString().split('T')[0];
+                            console.log('📅 调整后的交易日:', startDate);
+                        }
+                    } catch (error) {
+                        console.warn('无法验证交易日状态，使用原始日期:', startDate);
+                    }
+                }
+                
                 let predictionParams = {
                     file_path: `stock_${stockCode}_live`, // 使用akshare实时数据格式
                     lookback: lookback,
@@ -1740,9 +1755,10 @@
         }
 
         // Trading calendar functions
-        function loadTradingCalendar() {
+        async function loadTradingCalendar() {
             const mode = getParamValue('trading-mode', 'calendar');
-            const startDate = getNextBusinessDay().toISOString().split('T')[0]; // 使用默认日期计算
+            const nextBusinessDay = await getNextBusinessDay();
+            const startDate = nextBusinessDay.toISOString().split('T')[0]; // 使用默认日期计算
             
             if (!startDate) {
                 showStatus('error', '请选择预测起始日期');
@@ -2096,15 +2112,39 @@
                 });
         }
 
-        // Function to get next business day (Monday-Friday)
-        function getNextBusinessDay(startDate = new Date()) {
+        // Function to get next business day (Monday-Friday) with trading calendar check
+        async function getNextBusinessDay(startDate = new Date()) {
             const date = new Date(startDate);
             
-            // If it's Saturday (6) or Sunday (0), move to next Monday
+            // First, handle weekends
             if (date.getDay() === 6) { // Saturday
                 date.setDate(date.getDate() + 2);
             } else if (date.getDay() === 0) { // Sunday
                 date.setDate(date.getDate() + 1);
+            }
+            
+            // Check if the date is a trading day using the trading calendar
+            try {
+                const response = await fetch('/api/trading-calendar/check', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        date: date.toISOString().split('T')[0]
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (!result.is_trading_day) {
+                        // If not a trading day, move to the next day and recursively check
+                        date.setDate(date.getDate() + 1);
+                        return await getNextBusinessDay(date);
+                    }
+                }
+            } catch (error) {
+                console.warn('无法检查交易日历，使用默认日期:', error);
             }
             
             return date;
@@ -2141,9 +2181,12 @@
             });
             
             // Set default prediction start date to next business day (no input element needed)
-            const nextBusinessDay = getNextBusinessDay();
-            const formattedDate = nextBusinessDay.toISOString().split('T')[0];
-            console.log('📅 默认预测起始日期为下一个工作日:', formattedDate);
+            getNextBusinessDay().then(nextBusinessDay => {
+                const formattedDate = nextBusinessDay.toISOString().split('T')[0];
+                console.log('📅 默认预测起始日期为下一个工作日:', formattedDate);
+            }).catch(error => {
+                console.warn('无法获取默认预测起始日期:', error);
+            });
         }
 
         // Auto check model status on page load

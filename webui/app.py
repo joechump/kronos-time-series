@@ -335,7 +335,7 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
     创建美观的预测图表
     
     参数:
-        df (DataFrame): 原始数据DataFrame
+        df (DataFrame): 原始数据DataFrame（已包含复权数据）
         pred_df (DataFrame): 预测数据DataFrame
         lookback (int): 回看期数
         pred_len (int): 预测期数
@@ -361,7 +361,7 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None, his
     # 美观的深色主题配置
     dark_theme_layout = {
         'title': {
-            'text': 'Kronos 股票价格预测',
+            'text': 'Kronos 股票价格预测 (后复权价格)',
             'font': {'size': 24, 'color': '#ffffff', 'family': 'Arial, sans-serif'},
             'x': 0.5,
             'xanchor': 'center'
@@ -756,6 +756,49 @@ def is_trading_day():
         logger.error(f"检查交易日失败: {str(e)}", exc_info=True)
         return jsonify({'error': f'Failed to check trading day: {str(e)}'}), 500
 
+@app.route('/api/trading-calendar/check', methods=['GET'])
+def check_trading_day():
+    """
+    检查指定日期是否为交易日（兼容前端调用）
+    
+    返回:
+        Response: JSON格式的交易日检查结果
+    """
+    try:
+        if data_provider is None:
+            logger.warning("Akshare数据提供者不可用")
+            return jsonify({'error': 'Akshare数据提供者不可用'}), 503
+        
+        # 从查询参数获取日期
+        date_str = request.args.get('date', '')
+        
+        if not date_str:
+            logger.warning("交易日检查请求中日期参数为空")
+            return jsonify({'error': '日期不能为空'}), 400
+        
+        # 转换日期格式（前端使用YYYY-MM-DD，后端需要YYYYMMDD）
+        try:
+            date_ymd = date_str.replace('-', '')
+            if len(date_ymd) != 8:
+                raise ValueError("日期格式不正确")
+        except Exception as e:
+            logger.warning(f"日期格式转换失败: {date_str}, 错误: {e}")
+            return jsonify({'error': '日期格式不正确，请使用YYYY-MM-DD格式'}), 400
+        
+        logger.info(f"收到交易日检查请求，日期: {date_str} -> {date_ymd}")
+        is_trading = data_provider.is_trading_day(date_ymd)
+        logger.info(f"日期{date_str}是否为交易日: {is_trading}")
+        
+        return jsonify({
+            'success': True,
+            'date': date_str,
+            'is_trading_day': is_trading
+        })
+        
+    except Exception as e:
+        logger.error(f"交易日检查失败: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Failed to check trading day: {str(e)}'}), 500
+
 @app.route('/api/akshare/next-trading-day', methods=['GET'])
 def next_trading_day():
     """
@@ -1004,46 +1047,47 @@ def predict():
                 start_date = data.get('start_date')
                 
                 if start_date:
-                    # start_date 是数据获取的开始日期，预测从该日期开始向后进行
+                    # start_date 是预测的起始点，使用从该日期往前的历史数据进行预测
                     try:
                         start_dt = pd.to_datetime(start_date)
+                        # 添加最大允许日期限制，防止超出交易日历范围
+                        max_allowed_date = pd.to_datetime('2025-12-31')
+                        if start_dt > max_allowed_date:
+                            return jsonify({'error': f'开始日期 {start_dt.strftime("%Y-%m-%d")} 超出允许范围', 'suggestion': f'请选择不晚于 {max_allowed_date.strftime("%Y-%m-%d")} 的日期'}), 400
                     except Exception as e:
                         return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式', 'suggestion': '请检查日期格式是否正确，例如：2024-01-01'}), 400
                     
-                    # 找到从指定开始日期之后的数据
-                    mask = df['timestamps'] >= start_dt
+                    # 找到从指定开始日期往前的数据（包括开始日期）
+                    mask = df['timestamps'] <= start_dt
                     time_range_df = df[mask]
                     
-                    # 确保足够的数据：lookback + pred_len
-                    if len(time_range_df) < lookback + pred_len:
-                        return jsonify({'error': f'从开始时间 {start_dt.strftime("%Y-%m-%d")} 开始的数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(time_range_df)} 个可用', 'suggestion': '请选择更早的开始日期或使用其他股票代码'}), 400
+                    # 智能处理数据不足情况：需要从start_date往前有足够的lookback个数据点
+                    available_data_points = len(time_range_df)
                     
-                    # 使用从指定开始日期开始的lookback个数据点进行预测
-                    x_df = time_range_df.iloc[:lookback][required_cols]
-                    x_timestamp = time_range_df.iloc[:lookback]['timestamps']
+                    if available_data_points < lookback:
+                        return jsonify({'error': f'从开始日期 {start_dt.strftime("%Y-%m-%d")} 往前的数据不足，需要至少 {lookback} 个历史数据点进行预测，当前只有 {available_data_points} 个可用', 'suggestion': '请选择更晚的开始日期或使用其他股票代码'}), 400
+                    
+                    # 使用从指定开始日期往前的lookback个数据点进行预测
+                    x_df = time_range_df.iloc[-lookback:][required_cols]
+                    x_timestamp = time_range_df.iloc[-lookback:]['timestamps']
                     
                     # Kronos model requires y_timestamp length to equal pred_len
-                    # 预测从lookback数据点之后开始
+                    # 预测从start_date开始往后进行
                     last_timestamp = x_timestamp.iloc[-1]
                     time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0]
                     # 生成预测时间戳 - 使用交易日历
                     if data_provider:
-                        future_timestamps = generate_trading_day_timestamps(last_timestamp, pred_len)
+                        future_timestamps = generate_trading_day_timestamps(start_dt, pred_len)
                     else:
                         # 降级方案：使用简单的时间差
                         future_timestamps = pd.date_range(
-                            start=last_timestamp + time_diff,
+                            start=start_dt + time_diff,
                             periods=pred_len,
                             freq=time_diff
                         )
                     y_timestamp = pd.Series(future_timestamps, name='timestamps')
                     
-                    # Calculate actual time period length
-                    start_timestamp = time_range_df['timestamps'].iloc[0]
-                    end_timestamp = time_range_df['timestamps'].iloc[lookback+pred_len-1]
-                    time_span = end_timestamp - start_timestamp
-                    
-                    prediction_type = f"Kronos model prediction (从 {start_dt.strftime('%Y-%m-%d')} 开始: 使用前 {lookback} 个数据点预测后 {pred_len} 个交易日)"
+                    prediction_type = f"Kronos model prediction (从 {start_dt.strftime('%Y-%m-%d')} 开始: 使用前 {lookback} 个历史数据点预测后 {pred_len} 个交易日)"
                 else:
                     # Use latest data
                     x_df = df.iloc[:lookback][required_cols]
@@ -1108,40 +1152,41 @@ def predict():
                 start_date = data.get('start_date')
                 
                 if start_date:
-                    # start_date 是数据获取的开始日期，预测从该日期开始向后进行
+                    # start_date 是预测的起始点，使用从该日期往前的历史数据进行预测
                     try:
                         start_dt = pd.to_datetime(start_date)
+                        # 添加最大允许日期限制，防止超出交易日历范围
+                        max_allowed_date = pd.to_datetime('2025-12-31')
+                        if start_dt > max_allowed_date:
+                            return jsonify({'error': f'开始日期 {start_dt.strftime("%Y-%m-%d")} 超出允许范围', 'suggestion': f'请选择不晚于 {max_allowed_date.strftime("%Y-%m-%d")} 的日期'}), 400
                     except Exception as e:
-                        return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式'}), 400
+                        return jsonify({'error': f'无效的开始日期格式: {start_date}，请使用 YYYY-MM-DD 格式', 'suggestion': '请检查日期格式是否正确，例如：2024-01-01'}), 400
                     
-                    # 找到从指定开始日期之后的数据
-                    mask = df['timestamps'] >= start_dt
+                    # 找到从指定开始日期往前的数据（包括开始日期）
+                    mask = df['timestamps'] <= start_dt
                     time_range_df = df[mask]
                     
-                    # 确保足够的数据：lookback + pred_len
-                    if len(time_range_df) < lookback + pred_len:
-                        return jsonify({'error': f'从开始时间 {start_dt.strftime("%Y-%m-%d")} 开始的数据不足，需要至少 {lookback + pred_len} 个数据点，当前只有 {len(time_range_df)} 个可用'}), 400
+                    # 智能处理数据不足情况：需要从start_date往前有足够的lookback个数据点
+                    available_data_points = len(time_range_df)
                     
-                    # 使用从指定开始日期开始的lookback个数据点进行预测
-                    x_df = time_range_df.iloc[:lookback][required_cols]
-                    x_timestamp = time_range_df.iloc[:lookback]['timestamps']
+                    if available_data_points < lookback:
+                        return jsonify({'error': f'从开始日期 {start_dt.strftime("%Y-%m-%d")} 往前的数据不足，需要至少 {lookback} 个历史数据点进行预测，当前只有 {available_data_points} 个可用'}), 400
+                    
+                    # 使用从指定开始日期往前的lookback个数据点进行预测
+                    x_df = time_range_df.iloc[-lookback:][required_cols]
+                    x_timestamp = time_range_df.iloc[-lookback:]['timestamps']
                     
                     # Generate future timestamps for prediction (not actual values)
                     last_timestamp = x_timestamp.iloc[-1]
                     time_diff = df['timestamps'].iloc[1] - df['timestamps'].iloc[0]
                     future_timestamps = pd.date_range(
-                        start=last_timestamp + time_diff,
+                        start=start_dt + time_diff,
                         periods=pred_len,
                         freq=time_diff
                     )
                     y_timestamp = pd.Series(future_timestamps, name='timestamps')
                     
-                    # Calculate actual time period length
-                    start_timestamp = time_range_df['timestamps'].iloc[0]
-                    end_timestamp = time_range_df['timestamps'].iloc[lookback+pred_len-1]
-                    time_span = end_timestamp - start_timestamp
-                    
-                    prediction_type = f"Kronos model prediction (从 {start_dt.strftime('%Y-%m-%d')} 开始: 使用前 {lookback} 个数据点预测后 {pred_len} 个交易日)"
+                    prediction_type = f"Kronos model prediction (从 {start_dt.strftime('%Y-%m-%d')} 开始: 使用前 {lookback} 个历史数据点预测后 {pred_len} 个交易日)"
                 else:
                     # Use latest data
                     x_df = df.iloc[:lookback][required_cols]
